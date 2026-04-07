@@ -39,7 +39,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'apps.users',
     'apps.subscriptions',
-    'apps.payments'
+    'apps.payments',
+    'apps.vpn',
 ]
 
 MIDDLEWARE = [
