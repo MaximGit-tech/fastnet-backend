@@ -1,14 +1,15 @@
-from models import Payment
-from subscriptions.models import Subscription, Plan
-from vpn.panel_client import panel
-from time import timezone, timedelta
+from .models import Payment
+from apps.subscriptions.models import Subscription, Plan
+from apps.vpn.panel_client import panel
+from time import timezone
+from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from users.models import TelegramUser
-from utils.bot_notify import notify_bot
+from apps.users.models import TelegramUser
+from apps.utils.bot_notify import notify_bot
 import os
 import yookassa
 import uuid

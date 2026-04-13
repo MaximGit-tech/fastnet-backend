@@ -17,5 +17,5 @@ Including another URLconf
 from django.urls import path, include
 
 urlpatterns = [
-    path('api/v1/payment/', include('apps.payment.urls')),
+    path('api/v1/payment/', include('apps.payments.urls')),
 ]
