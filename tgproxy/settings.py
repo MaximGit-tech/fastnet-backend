@@ -22,7 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 import os
 
-SECRET_KEY = os.getenv('SECRET_KEY')
+SECRET_KEY = os.getenv('SECRET_KEY', '')
 DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = ["*"] # на время разработки
 
@@ -73,8 +73,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'tgproxy.wsgi.application'
 
 
+# rest framework
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'apps.utils.permissions.BotSecretPermission',
+    ],
+}
+
+
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 DATABASES = {
     'default': {
