@@ -6,12 +6,31 @@ import requests
 import paramiko
 import base64
 
-PANEL_URL = os.getenv("PANEL_URL")
-PANEL_PATH = os.getenv("PANEL_PATH", "/")
-PANEL_USER = os.getenv("PANEL_USER")
-PANEL_PASS = os.getenv("PANEL_PASS")
-INBOUND_ID = int(os.getenv("PANEL_INBOUND_ID", "1"))
-SUB_BASE_URL = os.getenv("SUB_BASE_URL")
+PANEL_URL     = os.getenv("PANEL_URL")
+PANEL_PATH    = os.getenv("PANEL_PATH", "/")
+PANEL_USER    = os.getenv("PANEL_USER")
+PANEL_PASS    = os.getenv("PANEL_PASS")
+INBOUND_ID    = int(os.getenv("PANEL_INBOUND_ID", "1"))
+
+DE_IP         = os.getenv("DE_SERVER_IP")
+DE_PORT       = os.getenv("DE_SERVER_PORT", "443")
+DE_PUBLIC_KEY = os.getenv("DE_PUBLIC_KEY")
+DE_SHORT_ID   = os.getenv("DE_SHORT_ID", "47")
+DE_SNI        = os.getenv("DE_SNI", "yahoo.com")
+
+RU_IP         = os.getenv("RU_SERVER_IP")
+RU_PORT       = os.getenv("RU_SERVER_PORT", "443")
+RU_UUID       = os.getenv("RU_UUID")
+RU_PUBLIC_KEY = os.getenv("RU_PUBLIC_KEY")
+RU_SHORT_ID   = os.getenv("RU_SHORT_ID", "f1")
+RU_SNI        = os.getenv("RU_SNI", "yahoo.com")
+
+DE_SSH_HOST   = os.getenv("DE_SSH_HOST")
+DE_SSH_PORT   = int(os.getenv("DE_SSH_PORT", "22"))
+DE_SSH_USER   = os.getenv("DE_SSH_USER", "root")
+DE_SSH_KEY    = os.getenv("DE_SSH_KEY_PATH")
+SUB_DIR       = os.getenv("SUB_DIR", "/var/www/sub")
+SUB_BASE_URL  = os.getenv("SUB_BASE_URL")
 
 class PanelClient:
     """

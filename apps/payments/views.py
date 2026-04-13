@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from users.models import TelegramUser
+from utils.bot_notify import notify_bot
 import os
 import yookassa
 import uuid
