@@ -1,10 +1,10 @@
-from rest_framework.views import APIView
 from .models import TelegramUser
 from rest_framework.response import Response
+from apps.utils.views import CsrfExemptAPIView
 
 
-class RegisterOrGetUserView(APIView):
-    """POST /api/v1/users/register/"""
+class RegisterOrGetUserView(CsrfExemptAPIView):
+    """POST /api/v1/users/register-or-get/"""
 
     def post(self, request):
         user, _ = TelegramUser.objects.update_or_create(
@@ -17,5 +17,5 @@ class RegisterOrGetUserView(APIView):
         return Response({
             'telegram_id': user.telegram_id,
             'username': user.username,
-            'id_banned': user.is_banned,
+            'is_banned': user.is_banned,
         })

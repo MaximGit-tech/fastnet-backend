@@ -1,7 +1,7 @@
 from django.urls import path
-from .views import SBPPaymentCreateView, YookassaWebhookView
+from .views import YookassaPaymentCreateView, YookassaWebhookView
 
 urlpatterns = [
-    path('yookassa/create/', SBPPaymentCreateView.as_view(), name='create-yookassa-payment'),
+    path('yookassa/create/', YookassaPaymentCreateView.as_view(), name='create-yookassa-payment'),
     path('yookassa/create/', YookassaWebhookView.as_view(), name='yookassa-webhook'),
 ]

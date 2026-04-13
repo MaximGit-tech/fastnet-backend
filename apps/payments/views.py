@@ -10,28 +10,27 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from apps.users.models import TelegramUser
 from apps.utils.bot_notify import notify_bot
+from apps.utils.views import CsrfExemptAPIView
+from yookassa import Configuration, Payment as YooPayment
 import os
-import yookassa
 import uuid
 import json
 
 
-SBP_PHONE = os.getenv("SBP_PHONE")
-SBP_BANK  = os.getenv("SBP_BANK")
-YOOKASSA_RETURN_URL = os.getenv("YOOKASSA_RETURN_URL")
+Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
+Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
+
+YOOKASSA_RETURN_URL = os.getenv("YOOKASSA_RETURN_URL", "https://t.me/your_bot")
+
 
 def activate_subscription(payment: Payment):
-    """
-    Активирует подписку после подтверждения оплаты.
-    Создаёт VPN ключи и файл подписки через panel.create_subscription().
-    """
     sub = Subscription.objects.create(
         user=payment.user,
         plan=payment.plan,
         status='pending'
     )
     result = panel.create_subscription(
-        telegram_id=panel.user.telegram_id,
+        telegram_id=payment.user.telegram_id,
         subscription_id=sub.id,
         days=payment.plan.days
     )
@@ -50,74 +49,82 @@ def activate_subscription(payment: Payment):
     return sub
 
 
-class SBPPaymentCreateView(APIView):
+class YookassaPaymentCreateView(CsrfExemptAPIView):
     """
-    POST /api/v1/payments/yookassa/create/
-    Создаёт платёж в ЮKassa и возвращает ссылку на оплату.
-    Пользователь переходит по ссылке, оплачивает, ЮKassa шлёт webhook.
+    POST /api/v1/payment/yookassa/create/
     """
     def post(self, request):
         telegram_id = request.data.get("telegram_id")
-        plan_key    = request.data.get("plan_key")
+        plan_key = request.data.get("plan_key")
 
-        user = TelegramUser.objects.get(telegram_id=telegram_id)
-        plan = Plan.objects.get(key=plan_key)
+        if not telegram_id or not plan_key:
+            return Response({"error": "telegram_id и plan_key обязательны"}, status=400)
 
-        payment_data = yookassa.Payment.create({
+        try:
+            user = TelegramUser.objects.get(telegram_id=telegram_id)
+        except TelegramUser.DoesNotExist:
+            return Response({"error": "Пользователь не найден"}, status=404)
+
+        try:
+            plan = Plan.objects.get(key=plan_key, is_active=True)
+        except Plan.DoesNotExist:
+            return Response({"error": f"План '{plan_key}' не найден"}, status=404)
+
+        payment_data = YooPayment.create({
             "amount": {
-                "value":    f"{plan.price_rub}.00",
+                "value": f"{plan.price_rub}.00",
                 "currency": "RUB"
             },
             "confirmation": {
-                "type":       "redirect",
+                "type": "redirect",
                 "return_url": YOOKASSA_RETURN_URL
             },
-            "capture":     True,
-            "description": f"VPN {plan.name}",
+            "capture": True,
+            "description": f"VPN подписка — {plan.name}",
             "metadata": {
                 "telegram_id": str(telegram_id),
-                "plan_key":    plan_key,
+                "plan_key": plan_key,
             }
         }, str(uuid.uuid4()))
 
         payment = Payment.objects.create(
-            user=user, plan=plan,
-            method="manual",
+            user=user,
+            plan=plan,
+            method="yookassa",
             amount_rub=plan.price_rub,
             provider_payment_id=payment_data.id,
         )
 
         return Response({
-            "payment_id":       payment.id,
-            "payment_url":      payment_data.confirmation.confirmation_url,
-            "yukassa_payment_id": payment_data.id,
+            "payment_id": payment.id,
+            "payment_url": payment_data.confirmation.confirmation_url,
+            "yookassa_payment_id": payment_data.id,
         })
-        
-        
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class YookassaWebhookView(APIView):
     """
-    POST /webhook/yookassa/
-    Принимает уведомления от ЮKassa об успешной оплате.
-    Верификация через IP-адреса ЮKassa или подпись.
+    POST /api/v1/payment/webhook/yookassa/
+    Вебхук от ЮKassa — вызывается автоматически после оплаты.
     """
     permission_classes = [AllowAny]
 
     def post(self, request):
         try:
-            data   = json.loads(request.body)
-            event  = data.get("event")
-            obj    = data.get("object", {})
+            data = json.loads(request.body)
         except Exception:
             return Response(status=400)
+
+        event = data.get("event")
+        obj = data.get("object", {})
 
         if event != "payment.succeeded":
             return Response(status=200)
 
         yookassa_payment_id = obj.get("id")
-        metadata           = obj.get("metadata", {})
-        telegram_id        = int(metadata.get("telegram_id", 0))
-        plan_key           = metadata.get("plan_key", "")
+        metadata = obj.get("metadata", {})
+        telegram_id = int(metadata.get("telegram_id", 0))
 
         try:
             payment = Payment.objects.get(
@@ -130,13 +137,9 @@ class YookassaWebhookView(APIView):
         sub = activate_subscription(payment)
 
         notify_bot(telegram_id, "subscription_activated", {
-            "plan_name":  payment.plan.name,
-            "sub_link":   sub.sub_link,
+            "plan_name": payment.plan.name,
+            "sub_link": sub.sub_link,
             "expires_at": sub.expires_at.isoformat(),
         })
 
         return Response(status=200)
-    
-
-
-

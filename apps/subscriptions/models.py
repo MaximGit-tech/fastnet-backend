@@ -7,8 +7,6 @@ class Plan(models.Model):
     name = models.CharField(max_length=64)
     days = models.IntegerField()
     price_rub = models.IntegerField()
-    price_stars = models.IntegerField()
-    price_usdt = models.DecimalField(max_digits=10, decimal_places=2)
     is_active = models.BooleanField(default=True)
 
     class Meta:
