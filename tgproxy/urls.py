@@ -18,4 +18,5 @@ from django.urls import path, include
 
 urlpatterns = [
     path('api/v1/payment/', include('apps.payments.urls')),
+    path('api/v1/users/', include('apps.users.urls')),
 ]
