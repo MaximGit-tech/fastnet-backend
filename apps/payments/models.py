@@ -4,10 +4,12 @@ from apps.subscriptions.models import Subscription, Plan
 
 class Payment(models.Model):
     METHOD_CHOICES = [
-        ("manual", "СБП/Карта (ручное)"),
-        ("stars",  "Telegram Stars"),
-        ("crypto", "Криптовалюта"),
-    ]
+        ("yookassa", "ЮKassa"),
+        ("manual",   "СБП/Карта (ручное)"),
+        ("stars",    "Telegram Stars"),
+        ("crypto",   "Криптовалюта"),
+]
+    
     STATUS_CHOICES = [
         ("pending",  "Ожидает"),
         ("paid",     "Оплачен"),

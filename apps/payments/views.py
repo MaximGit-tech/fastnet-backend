@@ -1,6 +1,5 @@
 from .models import Payment
 from apps.subscriptions.models import Subscription, Plan
-from apps.vpn.panel_client import panel
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.views import APIView
@@ -24,6 +23,7 @@ YOOKASSA_RETURN_URL = os.getenv("YOOKASSA_RETURN_URL", "https://t.me/your_bot")
 
 
 def activate_subscription(payment: Payment):
+    from apps.vpn.panel_client import panel
     sub = Subscription.objects.create(
         user=payment.user,
         plan=payment.plan,
@@ -92,7 +92,7 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
             plan=plan,
             method="yookassa",
             amount_rub=plan.price_rub,
-            provider_payment_id=payment_data.id,
+            provider_charge_id=payment_data.id, 
         )
 
         return Response({
@@ -128,9 +128,9 @@ class YookassaWebhookView(APIView):
 
         try:
             payment = Payment.objects.get(
-                provider_payment_id=yookassa_payment_id,
-                status="pending"
-            )
+            provider_charge_id=yookassa_payment_id, 
+            status="pending"
+        )
         except Payment.DoesNotExist:
             return Response(status=200)
 

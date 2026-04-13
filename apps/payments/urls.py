@@ -3,5 +3,5 @@ from .views import YookassaPaymentCreateView, YookassaWebhookView
 
 urlpatterns = [
     path('yookassa/create/', YookassaPaymentCreateView.as_view(), name='create-yookassa-payment'),
-    path('yookassa/create/', YookassaWebhookView.as_view(), name='yookassa-webhook'),
+    path('yookassa/webhook/', YookassaWebhookView.as_view(), name='yookassa-webhook'),
 ]
