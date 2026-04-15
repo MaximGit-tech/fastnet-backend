@@ -1,7 +1,8 @@
 from django.db import models
 
 class TelegramUser(models.Model):
-    telegram_id = models.BigIntegerField(unique=True)
+    email = models.EmailField(primary_key=True, max_length=255)
+    telegram_id = models.BigIntegerField(unique=True, blank=True)
     username = models.CharField(max_length=64, blank=True)
     full_name = models.CharField(max_length=128, blank=True)
     is_banned = models.BooleanField(default=False)
