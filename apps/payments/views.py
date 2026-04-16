@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from apps.users.models import TelegramUser
+from apps.users.models import User
 from apps.utils.bot_notify import notify_bot
 from apps.utils.views import CsrfExemptAPIView
 from yookassa import Configuration, Payment as YooPayment
@@ -30,7 +30,7 @@ def activate_subscription(payment: Payment):
         status='pending'
     )
     result = panel.create_subscription(
-        telegram_id=payment.user.telegram_id,
+        email=payment.user.email,
         subscription_id=sub.id,
         days=payment.plan.days
     )
@@ -54,15 +54,15 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
     POST /api/v1/payment/yookassa/create/
     """
     def post(self, request):
-        telegram_id = request.data.get("telegram_id")
+        email = request.data.get("email")
         plan_key = request.data.get("plan_key")
 
-        if not telegram_id or not plan_key:
-            return Response({"error": "telegram_id и plan_key обязательны"}, status=400)
+        if not email or not plan_key:
+            return Response({"error": "email и plan_key обязательны"}, status=400)
 
         try:
-            user = TelegramUser.objects.get(telegram_id=telegram_id)
-        except TelegramUser.DoesNotExist:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
             return Response({"error": "Пользователь не найден"}, status=404)
 
         try:
@@ -82,7 +82,7 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
             "capture": True,
             "description": f"VPN подписка — {plan.name}",
             "metadata": {
-                "telegram_id": str(telegram_id),
+                "email": str(email),
                 "plan_key": plan_key,
             }
         }, str(uuid.uuid4()))

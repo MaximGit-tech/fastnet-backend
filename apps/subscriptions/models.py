@@ -1,5 +1,5 @@
 from django.db import models
-from apps.users.models import TelegramUser
+from apps.users.models import User
 import os
 
 class Plan(models.Model):
@@ -24,7 +24,7 @@ class Subscription(models.Model):
         ("cancelled", "Отменена"),
     ]
 
-    user = models.ForeignKey(TelegramUser,
+    user = models.ForeignKey(User,
                             on_delete=models.CASCADE,
                             related_name="subscriptions")
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)

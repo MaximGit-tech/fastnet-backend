@@ -13,7 +13,7 @@ def notify_bot(telegram_id: int, event: str, data: dict):
         requests.post(
             BOT_WEBHOOK_URL,
             json={"telegram_id": telegram_id, "event": event, **data},
-            headers={"X-Bot_secret": BOT_SECRET},
+            headers={"X-Bot-Secret": BOT_SECRET},
             timeout=5
         )
     except Exception as e:
