@@ -12,6 +12,7 @@ class User(models.Model):
     is_banned   = models.BooleanField(default=False)
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
+    balance     = models.IntegerField()
 
     class Meta:
         db_table = "users"
@@ -22,7 +23,7 @@ class User(models.Model):
         return self.link_token
 
     def __str__(self):
-        return self.email
+        return f"User {self.email} with balance: {self.balance}"
 
 
 class EmailVerification(models.Model):
