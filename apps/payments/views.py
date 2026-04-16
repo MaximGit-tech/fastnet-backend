@@ -27,27 +27,25 @@ def activate_subscription(payment: Payment):
     sub = Subscription.objects.create(
         user=payment.user,
         plan=payment.plan,
-        status='pending'
+        status="pending"
     )
     result = panel.create_subscription(
-        email=payment.user.email,
+        user_id=payment.user.id,
         subscription_id=sub.id,
         days=payment.plan.days
     )
-
-    sub.panel_uuid = result['panel_uuid']
-    sub.sub_id = result["sub_id"]
-    sub.status = "active"
+    sub.panel_uuid = result["panel_uuid"]
+    sub.sub_id     = result["sub_id"]
+    sub.status     = "active"
     sub.expires_at = timezone.now() + timedelta(days=payment.plan.days)
     sub.save()
 
     payment.subscription = sub
-    payment.status = "paid"
-    payment.paid_at = timezone.now()
+    payment.status       = "paid"
+    payment.paid_at      = timezone.now()
     payment.save()
 
     return sub
-
 
 class YookassaPaymentCreateView(CsrfExemptAPIView):
     """

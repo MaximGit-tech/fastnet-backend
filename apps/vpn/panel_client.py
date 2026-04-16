@@ -284,7 +284,7 @@ class PanelClient:
         finally:
             ssh.close()
 
-    def create_subscription(self, telegram_id: int,
+    def create_subscription(self, user_id: int,
                              subscription_id: int,
                              days: int) -> dict:
         """
@@ -309,7 +309,7 @@ class PanelClient:
                 "sub_link":   "https://vpn.../sub/abc123"
             }
         """
-        email  = f"u{telegram_id}_{subscription_id}"
+        email  = f"u{user_id}_{subscription_id}"
         client = self.create_panel_client(email, days)
 
         content = self._build_subscription_content(client["uuid"])
