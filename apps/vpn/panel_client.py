@@ -101,7 +101,7 @@ class PanelClient:
 
         session = self._get_session()
         resp = session.post(
-            f"{PANEL_URL}{PANEL_PATH}panel/inbound/addClient",
+            f"{PANEL_URL}{PANEL_PATH}panel/api/inbounds/addClient",
             json={
                 "id": INBOUND_ID,
                 "settings": json.dumps({"clients": [client_data]})
@@ -121,8 +121,7 @@ class PanelClient:
         """
         session = self._get_session()
         resp = session.post(
-            f"{PANEL_URL}{PANEL_PATH}panel/inbound"
-            f"/{INBOUND_ID}/delClient/{client_uuid}",
+            f"{PANEL_URL}{PANEL_PATH}panel/api/inbounds/{INBOUND_ID}/delClient/{client_uuid}",
             timeout=10
         )
         return resp.json().get("success", False)
@@ -136,7 +135,7 @@ class PanelClient:
         exp_ms  = (int(time.time()) + days * 86400) * 1000
         session = self._get_session()
         resp = session.post(
-            f"{PANEL_URL}{PANEL_PATH}panel/inbound/updateClient/{client_uuid}",
+            f"{PANEL_URL}{PANEL_PATH}panel/api/inbounds/updateClient/{client_uuid}",
             json={
                 "id": INBOUND_ID,
                 "settings": json.dumps({"clients": [{
@@ -161,8 +160,7 @@ class PanelClient:
         """
         session = self._get_session()
         resp = session.get(
-            f"{PANEL_URL}{PANEL_PATH}panel/inbound"
-            f"/getClientTraffics/{email}",
+            f"{PANEL_URL}{PANEL_PATH}panel/api/inbounds/getClientTraffics/{email}",
             timeout=10
         )
         data = resp.json()

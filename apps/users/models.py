@@ -12,7 +12,7 @@ class User(models.Model):
     is_banned   = models.BooleanField(default=False)
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
-    balance     = models.IntegerField()
+    balance     = models.IntegerField(default=0)
 
     class Meta:
         db_table = "users"

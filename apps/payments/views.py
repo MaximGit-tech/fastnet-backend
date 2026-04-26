@@ -2,11 +2,8 @@ from .models import Payment
 from apps.subscriptions.models import Subscription, Plan
 from django.utils import timezone
 from datetime import timedelta
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from apps.users.models import User
 from apps.utils.bot_notify import notify_bot
 from apps.utils.views import CsrfExemptAPIView
@@ -19,7 +16,7 @@ import json
 Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
 Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
 
-YOOKASSA_RETURN_URL = os.getenv("YOOKASSA_RETURN_URL", "https://t.me/your_bot")
+YOOKASSA_RETURN_URL = os.getenv("YOOKASSA_RETURN_URL", "https://t.me/fastnet_serv_bot")
 
 
 def activate_subscription(payment: Payment):
