@@ -20,6 +20,8 @@ class Payment(models.Model):
     status = models.CharField(max_length=16,
                               choices=STATUS_CHOICES,
                               default="pending")
+    method = models.CharField(max_length=16, default="yookassa")
+    provider_charge_id = models.CharField(max_length=128, blank=True)
     amount_rub = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)

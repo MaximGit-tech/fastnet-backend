@@ -78,7 +78,7 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
                 "return_url": YOOKASSA_RETURN_URL
             },
             "capture": True,
-            "description": f"VPN подписка — {plan.name}",
+            "description": f"FastNet подписка — {plan.name}",
             "metadata": {
                 "email": str(email),
                 "plan_key": plan_key,
@@ -100,8 +100,7 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class YookassaWebhookView(APIView):
+class YookassaWebhookView(CsrfExemptAPIView):
     """
     POST /api/v1/payment/webhook/yookassa/
     Вебхук от ЮKassa — вызывается автоматически после оплаты.
@@ -121,8 +120,6 @@ class YookassaWebhookView(APIView):
             return Response(status=200)
 
         yookassa_payment_id = obj.get("id")
-        metadata = obj.get("metadata", {})
-        telegram_id = int(metadata.get("telegram_id", 0))
 
         try:
             payment = Payment.objects.get(
@@ -134,7 +131,7 @@ class YookassaWebhookView(APIView):
 
         sub = activate_subscription(payment)
 
-        notify_bot(telegram_id, "subscription_activated", {
+        notify_bot(payment.user, "subscription_activated", {
             "plan_name": payment.plan.name,
             "sub_link": sub.sub_link,
             "expires_at": sub.expires_at.isoformat(),
