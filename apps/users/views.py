@@ -18,4 +18,7 @@ class RegisterOrGetUserView(CsrfExemptAPIView):
             'telegram_id': user.telegram_id,
             'username': user.username,
             'is_banned': user.is_banned,
+            'balance': user.balance,
         })
+
+
