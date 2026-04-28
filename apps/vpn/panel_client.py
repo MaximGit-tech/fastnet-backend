@@ -95,7 +95,7 @@ class PanelClient:
             "subId":      sub_id,
             "enable":     True,
             "flow":       "xtls-rprx-vision",
-            "limitIp":    3,
+            "limitIp":    2,
             "totalGB":    0,
         }
 
@@ -144,7 +144,7 @@ class PanelClient:
                     "expiryTime": exp_ms,
                     "enable":     True,
                     "flow":       "xtls-rprx-vision",
-                    "limitIp":    3,
+                    "limitIp":    2,
                     "totalGB":    0,
                 }]})
             },
