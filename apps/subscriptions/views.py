@@ -1,7 +1,7 @@
 from apps.utils.views import CsrfExemptAPIView
 from rest_framework.response import Response
 from apps.users.models import User
-from .models import Subscription
+from .models import Subscription, Plan
 
 
 class UserSubscriptionListView(CsrfExemptAPIView):
@@ -40,3 +40,13 @@ class UserSubscriptionListView(CsrfExemptAPIView):
             
 
 
+class GetPlans(CsrfExemptAPIView):
+    """GET /api/v1/subscriptions/plans/"""
+    def get(self, request):
+        plans = Plan.objects.filter(is_active=True).order_by('-price_rub')
+
+        return Response([{
+            'plan_name': p.name,
+            'days': p.days,
+            'price_rub': p.price_rub
+        } for p in plans])
