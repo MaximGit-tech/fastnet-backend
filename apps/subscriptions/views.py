@@ -1,7 +1,7 @@
-from utils.views import CsrfExemptAPIView
+from apps.utils.views import CsrfExemptAPIView
 from rest_framework.response import Response
-from users.models import User
-from models import Subscription
+from apps.users.models import User
+from .models import Subscription
 
 
 class UserSubscriptionListView(CsrfExemptAPIView):

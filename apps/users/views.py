@@ -1,4 +1,3 @@
-# apps/users/views.py
 import random
 import string
 from django.core.mail import send_mail
@@ -16,9 +15,6 @@ def generate_code() -> str:
 class RegisterView(CsrfExemptAPIView):
     """
     POST /api/v1/users/register/
-    Шаг 1 — отправляем код на email.
-    Body: {email}
-    Response: {user_id, already_exists}
     """
     def post(self, request):
         email = request.data.get("email", "").lower().strip()
@@ -64,9 +60,6 @@ class RegisterView(CsrfExemptAPIView):
 class VerifyEmailView(CsrfExemptAPIView):
     """
     POST /api/v1/users/verify-email/
-    Шаг 2 — проверяем код и привязываем Telegram.
-    Body: {user_id, code, telegram_id, username, full_name}
-    Response: {success, link_token}
     """
     def post(self, request):
         user_id     = request.data.get("user_id")
@@ -112,8 +105,6 @@ class VerifyEmailView(CsrfExemptAPIView):
 class ResendCodeView(CsrfExemptAPIView):
     """
     POST /api/v1/users/resend-code/
-    Повторная отправка кода.
-    Body: {user_id}
     """
     def post(self, request):
         user_id = request.data.get("user_id")
@@ -155,8 +146,6 @@ class ResendCodeView(CsrfExemptAPIView):
 class GetUserView(CsrfExemptAPIView):
     """
     GET /api/v1/users/me/?telegram_id=123
-    Получить данные пользователя по telegram_id.
-    Вызывается ботом при каждом /start.
     """
     def get(self, request):
         telegram_id = request.query_params.get("telegram_id")
