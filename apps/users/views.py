@@ -36,6 +36,9 @@ class RegisterView(CsrfExemptAPIView):
             })
 
         code = generate_code()
+
+        EmailVerification.objects.filter(user=user, is_used=False).update(is_used=True)
+
         html = render_to_string(
             "verification_code.html",
             {"code": code}
@@ -48,7 +51,7 @@ class RegisterView(CsrfExemptAPIView):
 
         resend.Emails.send({
             "from": settings.EMAIL_FROM,
-            "to": [f'{user.email}'],
+            "to": [user.email],
             "subject": "FastNet код подтверждения",
             "html": html
         })
@@ -122,13 +125,16 @@ class ResendCodeView(CsrfExemptAPIView):
             is_used=False
         ).order_by("-created_at").first()
 
-        if last and (timezone.now() - last.created_at).seconds < 60:
+        if last and (timezone.now() - last.created_at).total_seconds() < 60:
             return Response(
                 {"error": "Подождите минуту перед повторной отправкой"},
                 status=429
             )
 
         code = generate_code()
+
+        EmailVerification.objects.filter(user=user, is_used=False).update(is_used=True)
+
         html = render_to_string(
             "verification_code.html",
             {"code": code}
@@ -141,7 +147,7 @@ class ResendCodeView(CsrfExemptAPIView):
 
         resend.Emails.send({
             "from": settings.EMAIL_FROM,
-            "to": [f'{user.email}'],
+            "to": [user.email],
             "subject": "FastNet код подтверждения",
             "html": html
         })
@@ -155,6 +161,9 @@ class GetUserView(CsrfExemptAPIView):
     """
     def get(self, request):
         telegram_id = request.query_params.get("telegram_id")
+
+        if not telegram_id:
+            return Response({"error": "telegram_id обязателен"}, status=400)
 
         try:
             user = User.objects.get(telegram_id=telegram_id)
