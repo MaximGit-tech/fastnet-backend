@@ -15,7 +15,8 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+from dotenv import load_dotenv
+load_dotenv()
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -30,6 +31,26 @@ ALLOWED_HOSTS = ["*"] # на время разработки
 EMAIL_FROM = os.getenv('EMAIL_FROM')
 RESEND_API_KEY = os.getenv('RESEND_API_KEY')
 
+# Celery
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL')
+CELERY_RESULT_BACKEND = "django-db"
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TIMEZONE = "Europe/Moscow"
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    "deactivate-expired": {
+        "task": "apps.subscriptions.tasks.deactivate_expired_subscriptions",
+        "schedule": crontab(minute="0"),
+    },
+    "notify-expiring": {
+        "task": "apps.subscriptions.tasks.notify_expiring_subscriptions",
+        "schedule": crontab(hour="10", minute="0"),
+    },
+}
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -39,6 +60,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_celery_beat',
+    'django_celery_results',
     'rest_framework',
     'apps.users',
     'apps.subscriptions',
