@@ -1,11 +1,15 @@
 import random
 import string
-from django.core.mail import send_mail
+import resend
+from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.response import Response
 from apps.utils.views import CsrfExemptAPIView
 from .models import User, EmailVerification
+from django.template.loader import render_to_string
+
+resend.api_key = settings.RESEND_API_KEY
 
 
 def generate_code() -> str:
@@ -32,23 +36,22 @@ class RegisterView(CsrfExemptAPIView):
             })
 
         code = generate_code()
+        html = render_to_string(
+            "verification_code.html",
+            {"code": code}
+        )
         EmailVerification.objects.create(
             user=user,
             code=code,
             expires_at=timezone.now() + timedelta(minutes=10)
         )
 
-        send_mail(
-            subject="Код подтверждения FastNet",
-            message=(
-                f"Ваш код подтверждения: {code}\n\n"
-                f"Код действует 10 минут.\n"
-                f"Если вы не запрашивали код — проигнорируйте письмо."
-            ),
-            from_email=None,
-            recipient_list=[email],
-            fail_silently=False,
-        )
+        resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": [f'{user.email}'],
+            "subject": "FastNet код подтверждения",
+            "html": html
+        })
 
         return Response({
             "user_id":        user.id,
@@ -126,19 +129,22 @@ class ResendCodeView(CsrfExemptAPIView):
             )
 
         code = generate_code()
+        html = render_to_string(
+            "verification_code.html",
+            {"code": code}
+        )
         EmailVerification.objects.create(
             user=user,
             code=code,
             expires_at=timezone.now() + timedelta(minutes=10)
         )
 
-        send_mail(
-            subject="Новый код подтверждения VPN",
-            message=f"Новый код: {code}\n\nДействует 10 минут.",
-            from_email=None,
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
+        resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": [f'{user.email}'],
+            "subject": "FastNet код подтверждения",
+            "html": html
+        })
 
         return Response({"success": True})
 

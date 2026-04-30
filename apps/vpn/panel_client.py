@@ -239,7 +239,7 @@ class PanelClient:
         """
         de_key  = self._build_de_key(client_uuid)
         ru_key  = self._build_ru_key()
-        content = f"{de_key}\n{ru_key}\n"
+        content = f"# profile-title: Fast Net ⚡\n{de_key}\n{ru_key}\n"
         return base64.b64encode(content.encode("utf-8"))
 
     def _write_sub_file(self, sub_id: str, content: bytes) -> None:

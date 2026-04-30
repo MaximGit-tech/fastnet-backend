@@ -26,15 +26,9 @@ SECRET_KEY = os.getenv('SECRET_KEY', '')
 DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = ["*"] # на время разработки
 
-
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 465))
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL') == 'True'
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS') == 'True'
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
+# Email
+EMAIL_FROM = os.getenv('EMAIL_FROM')
+RESEND_API_KEY = os.getenv('RESEND_API_KEY')
 
 # Application definition
 
