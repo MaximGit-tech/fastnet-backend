@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'apps.subscriptions',
     'apps.payments',
     'apps.vpn',
+    'apps.admin_panel',
 ]
 
 MIDDLEWARE = [

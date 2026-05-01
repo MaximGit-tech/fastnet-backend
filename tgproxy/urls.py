@@ -10,6 +10,7 @@ urlpatterns = [
     path('api/v1/payment/', include('apps.payments.urls')),
     path('api/v1/users/', include('apps.users.urls')),
     path('api/v1/subscriptions/', include('apps.subscriptions.urls')),
+    path('api/v1/admin/', include('apps.admin_panel.urls')),
 ]
 
 handler500 = handler500
