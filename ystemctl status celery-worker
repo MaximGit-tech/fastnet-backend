@@ -1,0 +1,18 @@
+[0;1;32m●[0m gunicorn.service - FastNet Gunicorn
+     Loaded: loaded (/etc/systemd/system/gunicorn.service; enabled; vendor preset: enabled)
+     Active: [0;1;32mactive (running)[0m since Fri 2026-05-01 07:21:07 UTC; 6s ago
+   Main PID: 70093 (gunicorn)
+      Tasks: 4 (limit: 2257)
+     Memory: 82.1M
+     CGroup: /system.slice/gunicorn.service
+             ├─70093 /opt/proxy-telegram-backend/.venv/bin/python3.9 /opt/proxy-telegram-backend/.venv/bin/gunicorn tgproxy.wsgi:application --bind 127.0.0.1:8000 --workers 2
+             ├─70110 /opt/proxy-telegram-backend/.venv/bin/python3.9 /opt/proxy-telegram-backend/.venv/bin/gunicorn tgproxy.wsgi:application --bind 127.0.0.1:8000 --workers 2
+             └─70111 /opt/proxy-telegram-backend/.venv/bin/python3.9 /opt/proxy-telegram-backend/.venv/bin/gunicorn tgproxy.wsgi:application --bind 127.0.0.1:8000 --workers 2
+
+May 01 07:21:07 fast-net.online systemd[1]: Started FastNet Gunicorn.
+May 01 07:21:07 fast-net.online gunicorn[70093]: [2026-05-01 07:21:07 +0000] [70093] [INFO] Starting gunicorn 25.3.0
+May 01 07:21:07 fast-net.online gunicorn[70093]: [2026-05-01 07:21:07 +0000] [70093] [INFO] Listening at: http://127.0.0.1:8000 (70093)
+May 01 07:21:07 fast-net.online gunicorn[70093]: [2026-05-01 07:21:07 +0000] [70093] [INFO] Using worker: sync
+May 01 07:21:07 fast-net.online gunicorn[70110]: [2026-05-01 07:21:07 +0000] [70110] [INFO] Booting worker with pid: 70110
+May 01 07:21:08 fast-net.online gunicorn[70111]: [2026-05-01 07:21:08 +0000] [70111] [INFO] Booting worker with pid: 70111
+May 01 07:21:08 fast-net.online gunicorn[70093]: [2026-05-01 07:21:08 +0000] [70093] [INFO] Control socket listening at /root/.gunicorn/gunicorn.ctl
