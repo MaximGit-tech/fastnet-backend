@@ -2,6 +2,7 @@ from apps.utils.views import CsrfExemptAPIView
 from rest_framework.response import Response
 from apps.users.models import User
 from .models import Subscription, Plan
+from django.utils import timezone
 
 
 class UserSubscriptionListView(CsrfExemptAPIView):
@@ -51,3 +52,101 @@ class GetPlans(CsrfExemptAPIView):
             'days': p.days,
             'price_rub': p.price_rub
         } for p in plans])
+    
+
+class RenewSubscriptionView(CsrfExemptAPIView):
+    """
+    POST /api/v1/subscriptions/{subscription_id}/renew/
+    """
+    def post(self, request, subscription_id):
+        from apps.vpn.panel_client import panel
+        from datetime import timedelta
+
+        telegram_id = request.data.get("telegram_id")
+        days = request.data.get("days")
+
+        if not telegram_id or not days:
+            return Response({"error": "telegram_id и days обязательны"}, status=400)
+
+        try:
+            user = User.objects.get(telegram_id=telegram_id)
+        except User.DoesNotExist:
+            return Response({"error": "Пользователь не найден"}, status=404)
+
+        try:
+            sub = Subscription.objects.get(id=subscription_id, user=user)
+        except Subscription.DoesNotExist:
+            return Response({"error": "Подписка не найдена"}, status=404)
+
+        if not sub.panel_uuid or not sub.sub_id:
+            return Response({"error": "Подписка не активирована"}, status=400)
+
+        panel.renew_subscription(
+            telegram_id=user.telegram_id,
+            subscription_id=sub.id,
+            panel_uuid=sub.panel_uuid,
+            sub_id=sub.sub_id,
+            days=days
+        )
+
+        if sub.status == "active" and sub.expires_at:
+            sub.expires_at = sub.expires_at + timedelta(days=days)
+        else:
+            sub.expires_at = timezone.now() + timedelta(days=days)
+
+        sub.status = "active"
+        sub.save()
+
+        return Response({
+            "success": True,
+            "subscription_id": sub.id,
+            "expires_at": sub.expires_at.isoformat(),
+            "sub_link": sub.sub_link,
+        })
+
+
+class RegenerateSubIdView(CsrfExemptAPIView):
+    """
+    POST /api/v1/subscriptions/{subscription_id}/regenerate/
+    Генерирует новый sub_id — старая ссылка перестаёт работать.
+    Body: {"telegram_id": 987654321}
+    """
+    def post(self, request, subscription_id):
+        from apps.vpn.panel_client import panel
+        import uuid
+
+        telegram_id = request.data.get("telegram_id")
+
+        if not telegram_id:
+            return Response({"error": "telegram_id обязателен"}, status=400)
+
+        try:
+            user = User.objects.get(telegram_id=telegram_id)
+        except User.DoesNotExist:
+            return Response({"error": "Пользователь не найден"}, status=404)
+
+        try:
+            sub = Subscription.objects.get(id=subscription_id, user=user)
+        except Subscription.DoesNotExist:
+            return Response({"error": "Подписка не найдена"}, status=404)
+
+        if not sub.panel_uuid or not sub.sub_id:
+            return Response({"error": "Подписка не активирована"}, status=400)
+
+        try:
+            panel._delete_sub_file(sub.sub_id)
+        except Exception:
+            pass
+
+        new_sub_id = uuid.uuid4().hex[:16]
+        content = panel._build_subscription_content(sub.panel_uuid)
+        panel._write_sub_file(new_sub_id, content)
+
+        sub.sub_id = new_sub_id
+        sub.save()
+
+        return Response({
+            "success": True,
+            "subscription_id": sub.id,
+            "sub_link": sub.sub_link,
+        })
