@@ -42,7 +42,7 @@ class Subscription(models.Model):
     @property
     def sub_link(self) -> str:
         base = os.getenv("SUB_BASE_URL", "")
-        return f"{base}/{self.sub_id}" if self.sub_id else ""
+        return f"{base}/{self.sub_id}#FastNet" if self.sub_id else ""
 
     @property
     def traffic_used_gb(self) -> float:
