@@ -22,38 +22,30 @@ YOOKASSA_RETURN_URL = os.getenv("YOOKASSA_RETURN_URL", "https://t.me/fastnet_ser
 def activate_subscription(payment: Payment):
     from apps.vpn.panel_client import panel
 
-    existing_sub = Subscription.objects.filter(
-        user=payment.user,
-        plan=payment.plan,
-        status__in=["active", "expired"]
-    ).order_by("-created_at").first()
+    if payment.subscription_id:
+        sub = payment.subscription
 
-    if existing_sub and existing_sub.panel_uuid and existing_sub.sub_id:
-        result = panel.renew_subscription(
+        if sub.status == "active" and sub.expires_at:
+            sub.expires_at = sub.expires_at + timedelta(days=payment.plan.days)
+        else:
+            sub.expires_at = timezone.now() + timedelta(days=payment.plan.days)
+
+        panel.renew_subscription(
             telegram_id=payment.user.telegram_id,
-            subscription_id=existing_sub.id,
-            panel_uuid=existing_sub.panel_uuid,
-            sub_id=existing_sub.sub_id,
+            subscription_id=sub.id,
+            panel_uuid=sub.panel_uuid,
+            sub_id=sub.sub_id,
             days=payment.plan.days
         )
-        from django.utils import timezone
-        from datetime import timedelta
 
-        if existing_sub.status == "active":
-            existing_sub.expires_at = existing_sub.expires_at + timedelta(days=payment.plan.days)
-        else:
+        sub.status = "active"
+        sub.save()
 
-            existing_sub.expires_at = timezone.now() + timedelta(days=payment.plan.days)
-
-        existing_sub.status = "active"
-        existing_sub.save()
-
-        payment.subscription = existing_sub
         payment.status = "paid"
         payment.paid_at = timezone.now()
         payment.save()
 
-        return existing_sub
+        return sub
 
     else:
         sub = Subscription.objects.create(
@@ -79,6 +71,7 @@ def activate_subscription(payment: Payment):
 
         return sub
 
+
 class YookassaPaymentCreateView(CsrfExemptAPIView):
     """
     POST /api/v1/payment/yookassa/create/
@@ -86,6 +79,7 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
     def post(self, request):
         email = request.data.get("email")
         plan_key = request.data.get("plan_key")
+        subscription_id = request.data.get("subscription_id")
 
         if not email or not plan_key:
             return Response({"error": "email и plan_key обязательны"}, status=400)
@@ -100,6 +94,13 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
         except Plan.DoesNotExist:
             return Response({"error": f"План '{plan_key}' не найден"}, status=404)
 
+        sub = None
+        if subscription_id:
+            try:
+                sub = Subscription.objects.get(id=subscription_id, user=user)
+            except Subscription.DoesNotExist:
+                return Response({"error": "Подписка не найдена"}, status=404)
+
         payment_data = YooPayment.create({
             "amount": {
                 "value": f"{plan.price_rub}.00",
@@ -110,19 +111,21 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
                 "return_url": YOOKASSA_RETURN_URL
             },
             "capture": True,
-            "description": f"FastNet подписка — {plan.name}",
+            "description": f"FastNet {'продление' if sub else 'подписка'} — {plan.name}",
             "metadata": {
                 "email": str(email),
                 "plan_key": plan_key,
+                "subscription_id": str(subscription_id) if subscription_id else "",
             }
         }, str(uuid.uuid4()))
 
         payment = Payment.objects.create(
             user=user,
             plan=plan,
+            subscription=sub,
             method="yookassa",
             amount_rub=plan.price_rub,
-            provider_charge_id=payment_data.id, 
+            provider_charge_id=payment_data.id,
         )
 
         return Response({
@@ -134,8 +137,7 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
 
 class YookassaWebhookView(CsrfExemptAPIView):
     """
-    POST /api/v1/payment/webhook/yookassa/
-    Вебхук от ЮKassa — вызывается автоматически после оплаты.
+    POST /api/v1/payment/yookassa/webhook/
     """
     permission_classes = [AllowAny]
 
@@ -154,10 +156,12 @@ class YookassaWebhookView(CsrfExemptAPIView):
         yookassa_payment_id = obj.get("id")
 
         try:
-            payment = Payment.objects.get(
-            provider_charge_id=yookassa_payment_id, 
-            status="pending"
-        )
+            payment = Payment.objects.select_related(
+                "user", "plan", "subscription"
+            ).get(
+                provider_charge_id=yookassa_payment_id,
+                status="pending"
+            )
         except Payment.DoesNotExist:
             return Response(status=200)
 
