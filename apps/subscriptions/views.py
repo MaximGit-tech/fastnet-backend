@@ -46,6 +46,7 @@ class GetPlans(CsrfExemptAPIView):
         plans = Plan.objects.filter(is_active=True).order_by('price_rub')
 
         return Response([{
+            'plan_key': p.key,
             'plan_name': p.name,
             'days': p.days,
             'price_rub': p.price_rub
