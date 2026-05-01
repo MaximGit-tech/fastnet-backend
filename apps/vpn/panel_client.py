@@ -316,7 +316,7 @@ class PanelClient:
         return {
             "panel_uuid": client["uuid"],
             "sub_id":     client["sub_id"],
-            "sub_link":   f"{SUB_BASE_URL}/{client['sub_id']}",
+            "sub_link":   f"{SUB_BASE_URL}/{client['sub_id']}#FastNet",
         }
 
     def delete_subscription(self, panel_uuid: str, sub_id: str) -> None:
