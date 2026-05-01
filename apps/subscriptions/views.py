@@ -43,7 +43,7 @@ class UserSubscriptionListView(CsrfExemptAPIView):
 class GetPlans(CsrfExemptAPIView):
     """GET /api/v1/subscriptions/plans/"""
     def get(self, request):
-        plans = Plan.objects.filter(is_active=True).order_by('-price_rub')
+        plans = Plan.objects.filter(is_active=True).order_by('price_rub')
 
         return Response([{
             'plan_name': p.name,
