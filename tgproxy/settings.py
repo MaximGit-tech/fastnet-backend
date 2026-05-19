@@ -63,12 +63,19 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'django_celery_results',
     'rest_framework',
+    'rest_framework_simplejwt',
     'apps.users',
     'apps.subscriptions',
     'apps.payments',
     'apps.vpn',
     'apps.admin_panel',
 ]
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -103,9 +110,9 @@ WSGI_APPLICATION = 'tgproxy.wsgi.application'
 # rest framework
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'apps.utils.permissions.BotSecretPermission',
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'apps.utils.authentication.BotSecretAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',

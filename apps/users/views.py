@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from apps.utils.views import CsrfExemptAPIView
 from .models import User, EmailVerification
 from django.template.loader import render_to_string
+from apps.utils.authentication import get_user_from_request
 
 resend.api_key = settings.RESEND_API_KEY
 
