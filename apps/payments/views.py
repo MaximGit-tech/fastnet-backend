@@ -16,8 +16,8 @@ import json
 Configuration.account_id = os.getenv("YOOKASSA_SHOP_ID")
 Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
 
-YOOKASSA_RETURN_URL = os.getenv("YOOKASSA_RETURN_URL", "https://t.me/fastnet_serv_bot")
-
+YOOKASSA_RETURN_URL_BOT = os.getenv("YOOKASSA_RETURN_URL_BOT", "https://t.me/fastnet_serv_bot")
+YOOKASSA_RETURN_URL_WEB = os.getenv("YOOKASSA_RETURN_URL_WEB", "https://fast-net.online/profile")
 
 def activate_subscription(payment: Payment):
     from apps.vpn.panel_client import panel
@@ -101,6 +101,12 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
             except Subscription.DoesNotExist:
                 return Response({"error": "Подписка не найдена"}, status=404)
 
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            return_url = os.getenv("YOOKASSA_RETURN_URL_WEB", "https://fast-net.online/profile")
+        else:
+            return_url = os.getenv("YOOKASSA_RETURN_URL_BOT", "https://t.me/fastnet_serv_bot")
+
         payment_data = YooPayment.create({
             "amount": {
                 "value": f"{plan.price_rub}.00",
@@ -108,7 +114,7 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
             },
             "confirmation": {
                 "type": "redirect",
-                "return_url": YOOKASSA_RETURN_URL
+                "return_url": return_url
             },
             "capture": True,
             "description": f"FastNet {'продление' if sub else 'подписка'} — {plan.name}",
