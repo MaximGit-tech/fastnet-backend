@@ -77,17 +77,17 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
     POST /api/v1/payment/yookassa/create/
     """
     def post(self, request):
-        email = request.data.get("email")
+        from apps.utils.authentication import get_user_from_request
+
+        user, err = get_user_from_request(request)
+        if err:
+            return err
+
         plan_key = request.data.get("plan_key")
         subscription_id = request.data.get("subscription_id")
 
-        if not email or not plan_key:
-            return Response({"error": "email и plan_key обязательны"}, status=400)
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({"error": "Пользователь не найден"}, status=404)
+        if not plan_key:
+            return Response({"error": "plan_key обязателен"}, status=400)
 
         try:
             plan = Plan.objects.get(key=plan_key, is_active=True)
@@ -113,7 +113,6 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
             "capture": True,
             "description": f"FastNet {'продление' if sub else 'подписка'} — {plan.name}",
             "metadata": {
-                "email": str(email),
                 "plan_key": plan_key,
                 "subscription_id": str(subscription_id) if subscription_id else "",
             }

@@ -22,12 +22,8 @@ class BotSecretAuthentication(BaseAuthentication):
     
 
 def get_user_from_request(request):
-    """
-    Возвращает (user, error_response).
-    Поддерживает JWT (сайт) и telegram_id (бот).
-    """
     auth = request.headers.get("Authorization", "")
-    
+
     if auth.startswith("Bearer "):
         try:
             token = AccessToken(auth.split(" ")[1])
@@ -36,15 +32,22 @@ def get_user_from_request(request):
         except (TokenError, User.DoesNotExist):
             from rest_framework.response import Response
             return None, Response({"error": "Невалидный токен"}, status=401)
-    
-    telegram_id = request.query_params.get("telegram_id") or request.data.get("telegram_id")
-    if telegram_id:
+
+    bot_secret = request.headers.get("X-Bot-Secret")
+    if bot_secret:
+        if bot_secret != os.getenv("BOT_SECRET"):
+            from rest_framework.response import Response
+            return None, Response({"error": "Неверный bot secret"}, status=403)
+        telegram_id = request.query_params.get("telegram_id") or request.data.get("telegram_id")
+        if not telegram_id:
+            from rest_framework.response import Response
+            return None, Response({"error": "telegram_id обязателен"}, status=400)
         try:
             user = User.objects.get(telegram_id=telegram_id)
             return user, None
         except User.DoesNotExist:
             from rest_framework.response import Response
             return None, Response({"error": "Пользователь не найден"}, status=404)
-    
+
     from rest_framework.response import Response
     return None, Response({"error": "Требуется авторизация"}, status=401)

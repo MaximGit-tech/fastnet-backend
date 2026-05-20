@@ -7,23 +7,18 @@ from django.utils import timezone
 
 class UserSubscriptionListView(CsrfExemptAPIView):
     """
-    GET /api/v1/subscriptions/?telegram_id=1234567
-    Возвращает все активные подписки пользователя с ключами
+    GET /api/v1/subscriptions/
     """
     def get(self, request):
-        telegram_id = request.query_params.get('telegram_id')
+        from apps.utils.authentication import get_user_from_request
 
-        if not telegram_id:
-            return Response({'error': 'telegram_id is required'}, status=400)
-        
-        try:
-            user = User.objects.get(telegram_id=telegram_id)
-        except User.DoesNotExist:
-            return Response({'error': 'user does not exist'}, status=404)
-        
+        user, err = get_user_from_request(request)
+        if err:
+            return err
+
         if user.is_banned:
             return Response({'error': 'user is banned'}, status=403)
-        
+
         sub = Subscription.objects.filter(
             user=user,
             status='active'
@@ -60,18 +55,16 @@ class RenewSubscriptionView(CsrfExemptAPIView):
     """
     def post(self, request, subscription_id):
         from apps.vpn.panel_client import panel
+        from apps.utils.authentication import get_user_from_request
         from datetime import timedelta
 
-        telegram_id = request.data.get("telegram_id")
+        user, err = get_user_from_request(request)
+        if err:
+            return err
+
         days = request.data.get("days")
-
-        if not telegram_id or not days:
-            return Response({"error": "telegram_id и days обязательны"}, status=400)
-
-        try:
-            user = User.objects.get(telegram_id=telegram_id)
-        except User.DoesNotExist:
-            return Response({"error": "Пользователь не найден"}, status=404)
+        if not days:
+            return Response({"error": "days обязателен"}, status=400)
 
         try:
             sub = Subscription.objects.get(id=subscription_id, user=user)
@@ -108,22 +101,15 @@ class RenewSubscriptionView(CsrfExemptAPIView):
 class RegenerateSubIdView(CsrfExemptAPIView):
     """
     POST /api/v1/subscriptions/{subscription_id}/regenerate/
-    Генерирует новый sub_id — старая ссылка перестаёт работать.
-    Body: {"telegram_id": 987654321}
     """
     def post(self, request, subscription_id):
         from apps.vpn.panel_client import panel
+        from apps.utils.authentication import get_user_from_request
         import uuid
 
-        telegram_id = request.data.get("telegram_id")
-
-        if not telegram_id:
-            return Response({"error": "telegram_id обязателен"}, status=400)
-
-        try:
-            user = User.objects.get(telegram_id=telegram_id)
-        except User.DoesNotExist:
-            return Response({"error": "Пользователь не найден"}, status=404)
+        user, err = get_user_from_request(request)
+        if err:
+            return err
 
         try:
             sub = Subscription.objects.get(id=subscription_id, user=user)

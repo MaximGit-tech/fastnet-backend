@@ -158,25 +158,129 @@ class ResendCodeView(CsrfExemptAPIView):
 
 class GetUserView(CsrfExemptAPIView):
     """
-    GET /api/v1/users/me/?telegram_id=123
+    GET /api/v1/users/me/
     """
     def get(self, request):
-        telegram_id = request.query_params.get("telegram_id")
+        user, err = get_user_from_request(request)
+        if err:
+            return err
 
-        if not telegram_id:
-            return Response({"error": "telegram_id обязателен"}, status=400)
+        return Response({
+            "user_id":     user.id,
+            "email":       user.email,
+            "is_verified": user.is_verified,
+            "is_banned":   user.is_banned,
+            "telegram_id": user.telegram_id,
+        })
+        
+class WebLoginView(CsrfExemptAPIView):
+    """
+    POST /api/v1/users/web/login/
+    """
+    def post(self, request):
+        email = request.data.get("email", "").lower().strip()
+
+        if not email or "@" not in email:
+            return Response({"error": "Некорректный email"}, status=400)
+
+        user, _ = User.objects.get_or_create(email=email)
+
+        if user.is_banned:
+            return Response({"error": "Аккаунт заблокирован"}, status=403)
+
+        last = EmailVerification.objects.filter(
+            user=user, is_used=False
+        ).order_by("-created_at").first()
+
+        if last and (timezone.now() - last.created_at).total_seconds() < 60:
+            return Response({"error": "Подождите минуту перед повторной отправкой"}, status=429)
+
+        code = generate_code()
+        EmailVerification.objects.filter(user=user, is_used=False).update(is_used=True)
+
+        html = render_to_string("verification_code.html", {"code": code})
+        EmailVerification.objects.create(
+            user=user,
+            code=code,
+            expires_at=timezone.now() + timedelta(minutes=10)
+        )
+
+        resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": [user.email],
+            "subject": "FastNet код подтверждения",
+            "html": html
+        })
+
+        return Response({"user_id": user.id})
+
+
+class WebVerifyView(CsrfExemptAPIView):
+    """
+    POST /api/v1/users/web/verify/
+    """
+    def post(self, request):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        user_id = request.data.get("user_id")
+        code = request.data.get("code", "").strip()
+
+        if not user_id or not code:
+            return Response({"error": "user_id и code обязательны"}, status=400)
 
         try:
-            user = User.objects.get(telegram_id=telegram_id)
-            return Response({
-                "user_id":     user.id,
-                "email":       user.email,
-                "is_verified": user.is_verified,
-                "is_banned":   user.is_banned,
-                "telegram_id": user.telegram_id,
-            })
+            user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "Не найден"}, status=404)
+            return Response({"error": "Пользователь не найден"}, status=404)
+
+        if user.is_banned:
+            return Response({"error": "Аккаунт заблокирован"}, status=403)
+
+        verification = EmailVerification.objects.filter(
+            user=user,
+            code=code,
+            is_used=False,
+            expires_at__gt=timezone.now()
+        ).order_by("-created_at").first()
+
+        if not verification:
+            return Response({"error": "Неверный или истёкший код"}, status=400)
+
+        verification.is_used = True
+        verification.save()
+
+        user.is_verified = True
+        user.save(update_fields=["is_verified"])
+
+        refresh = RefreshToken()
+        refresh["user_id"] = user.id
+        refresh["email"] = user.email
+
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user_id": user.id,
+            "email": user.email,
+        })
+
+
+class WebRefreshView(CsrfExemptAPIView):
+    """
+    POST /api/v1/users/web/refresh/
+    """
+    def post(self, request):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.exceptions import TokenError
+
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response({"error": "refresh обязателен"}, status=400)
+
+        try:
+            refresh = RefreshToken(refresh_token)
+            return Response({"access": str(refresh.access_token)})
+        except TokenError:
+            return Response({"error": "Невалидный или истёкший токен"}, status=401)
     
 
 
