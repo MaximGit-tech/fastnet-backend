@@ -38,16 +38,28 @@ def get_user_from_request(request):
         if bot_secret != os.getenv("BOT_SECRET"):
             from rest_framework.response import Response
             return None, Response({"error": "Неверный bot secret"}, status=403)
+
+        email = request.query_params.get("email") or request.data.get("email")
         telegram_id = request.query_params.get("telegram_id") or request.data.get("telegram_id")
-        if not telegram_id:
-            from rest_framework.response import Response
-            return None, Response({"error": "telegram_id обязателен"}, status=400)
-        try:
-            user = User.objects.get(telegram_id=telegram_id)
-            return user, None
-        except User.DoesNotExist:
-            from rest_framework.response import Response
-            return None, Response({"error": "Пользователь не найден"}, status=404)
+
+        if email:
+            try:
+                user = User.objects.get(email=email)
+                return user, None
+            except User.DoesNotExist:
+                from rest_framework.response import Response
+                return None, Response({"error": "Пользователь не найден"}, status=404)
+
+        if telegram_id:
+            try:
+                user = User.objects.get(telegram_id=telegram_id)
+                return user, None
+            except User.DoesNotExist:
+                from rest_framework.response import Response
+                return None, Response({"error": "Пользователь не найден"}, status=404)
+
+        from rest_framework.response import Response
+        return None, Response({"error": "email или telegram_id обязателен"}, status=400)
 
     from rest_framework.response import Response
     return None, Response({"error": "Требуется авторизация"}, status=401)
