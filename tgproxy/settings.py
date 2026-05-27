@@ -93,6 +93,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://fast-net.online",
     "https://admin.fast-net.online",
+    "https://fast-net-frontend.vercel.app",
 ]
 
 ROOT_URLCONF = 'tgproxy.urls'
@@ -120,13 +121,14 @@ WSGI_APPLICATION = 'tgproxy.wsgi.application'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'apps.utils.authentication.BotSecretAuthentication',
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
 }
-
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
