@@ -1,9 +1,14 @@
 import os
 import subprocess
+from datetime import timedelta
+
+from django.db.models import Sum, Count, Q
+from django.utils import timezone
 from rest_framework.response import Response
+
 from apps.utils.views import CsrfExemptAPIView
 from apps.users.models import User
-from apps.subscriptions.models import Subscription
+from apps.subscriptions.models import Subscription, Plan
 from apps.payments.models import Payment
 from apps.vpn.panel_client import panel
 
@@ -31,18 +36,40 @@ class ServerStatsView(CsrfExemptAPIView):
                     _, stdout, _ = ssh.exec_command(cmd)
                     return stdout.read().decode().strip()
 
-                cpu = run("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1")
-                mem = run("free -m | awk 'NR==2{printf \"%s/%s\", $3, $2}'")
-                disk = run("df -h / | awk 'NR==2{printf \"%s/%s\", $3, $2}'")
-                uptime = run("uptime -p")
-                ping = run("ping -c1 -W2 8.8.8.8 | tail -1 | awk '{print $4}' | cut -d'/' -f2")
+                cpu      = run("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1")
+                mem      = run("free -m | awk 'NR==2{printf \"%s/%s\", $3, $2}'")
+                disk     = run("df -h / | awk 'NR==2{printf \"%s/%s\", $3, $2}'")
+                uptime   = run("uptime -p")
+                ping     = run("ping -c1 -W2 8.8.8.8 | tail -1 | awk '{print $4}' | cut -d'/' -f2")
+
+                net_rx_bytes = run(
+                    "cat /proc/net/dev | awk 'NR>2{rx+=$2} END{print rx}'"
+                )
+                net_tx_bytes = run(
+                    "cat /proc/net/dev | awk 'NR>2{tx+=$10} END{print tx}'"
+                )
+
+                def bytes_to_gb(b):
+                    try:
+                        return round(int(b) / (1024 ** 3), 2)
+                    except Exception:
+                        return 0
+
+                connections = run("ss -tn | grep ESTAB | wc -l")
+
+                vpn_processes = run("pgrep -c xray || pgrep -c v2ray || echo 0")
+
                 return {
-                    "status": "online",
-                    "cpu_percent": cpu,
-                    "memory": mem,
-                    "disk": disk,
-                    "uptime": uptime,
-                    "ping_ms": ping,
+                    "status":        "online",
+                    "cpu_percent":   cpu,
+                    "memory":        mem,
+                    "disk":          disk,
+                    "uptime":        uptime,
+                    "ping_ms":       ping,
+                    "net_rx_gb":     bytes_to_gb(net_rx_bytes),
+                    "net_tx_gb":     bytes_to_gb(net_tx_bytes),
+                    "connections":   connections,
+                    "vpn_processes": vpn_processes,
                 }
             except Exception as e:
                 return {"status": "offline", "error": str(e)}
@@ -62,7 +89,7 @@ class ServerPingView(CsrfExemptAPIView):
     def get(self, request, server):
         hosts = {"de": DE_SSH_HOST, "ru": RU_SERVER_IP}
         if server not in hosts:
-            return Response({"error": "server must be list"}, status=400)
+            return Response({"error": "server must be 'de' or 'ru'"}, status=400)
 
         host = hosts[server]
         try:
@@ -70,14 +97,14 @@ class ServerPingView(CsrfExemptAPIView):
                 ["ping", "-c", "3", "-W", "2", host],
                 capture_output=True, text=True, timeout=10
             )
-            lines = result.stdout.strip().split("\n")
+            lines    = result.stdout.strip().split("\n")
             avg_line = [l for l in lines if "avg" in l or "rtt" in l]
-            avg_ms = avg_line[0].split("/")[4] if avg_line else None
+            avg_ms   = avg_line[0].split("/")[4] if avg_line else None
             return Response({
-                "server": server,
-                "host": host,
+                "server":    server,
+                "host":      host,
                 "reachable": result.returncode == 0,
-                "avg_ms": avg_ms,
+                "avg_ms":    avg_ms,
             })
         except Exception as e:
             return Response({"server": server, "reachable": False, "error": str(e)})
@@ -86,41 +113,64 @@ class ServerPingView(CsrfExemptAPIView):
 class UserStatsView(CsrfExemptAPIView):
     """
     GET /api/v1/admin/users/stats/
+    Общая статистика по пользователям.
     """
     def get(self, request):
-        total = User.objects.count()
-        verified = User.objects.filter(is_verified=True).count()
-        banned = User.objects.filter(is_banned=True).count()
-        with_active_sub = User.objects.filter(
-            subscriptions__status="active"
-        ).distinct().count()
+        now   = timezone.now()
+        today = now.date()
 
-        total_revenue = Payment.objects.filter(
-            status="paid"
-        ).aggregate(
-            total=__import__("django.db.models", fromlist=["Sum"]).Sum("amount_rub")
-        )["total"] or 0
+        total          = User.objects.count()
+        verified       = User.objects.filter(is_verified=True).count()
+        banned         = User.objects.filter(is_banned=True).count()
+        trial_used     = User.objects.filter(has_used_trial=True).count()
+        with_active    = User.objects.filter(subscriptions__status="active").distinct().count()
+
+        new_today  = User.objects.filter(created_at__date=today).count()
+        new_7days  = User.objects.filter(created_at__date__gte=today - timedelta(days=7)).count()
+        new_30days = User.objects.filter(created_at__date__gte=today - timedelta(days=30)).count()
+
+        paid_qs        = Payment.objects.filter(status="paid")
+        total_revenue  = paid_qs.aggregate(t=Sum("amount_rub"))["t"] or 0
+        rev_today      = paid_qs.filter(paid_at__date=today).aggregate(t=Sum("amount_rub"))["t"] or 0
+        rev_7days      = paid_qs.filter(paid_at__date__gte=today - timedelta(days=7)).aggregate(t=Sum("amount_rub"))["t"] or 0
+        rev_30days     = paid_qs.filter(paid_at__date__gte=today - timedelta(days=30)).aggregate(t=Sum("amount_rub"))["t"] or 0
 
         return Response({
-            "total_users": total,
-            "verified_users": verified,
-            "banned_users": banned,
-            "users_with_active_sub": with_active_sub,
-            "total_revenue_rub": total_revenue,
+            "users": {
+                "total":           total,
+                "verified":        verified,
+                "banned":          banned,
+                "trial_used":      trial_used,
+                "with_active_sub": with_active,
+                "new_today":       new_today,
+                "new_7days":       new_7days,
+                "new_30days":      new_30days,
+            },
+            "revenue": {
+                "total_rub":   total_revenue,
+                "today_rub":   rev_today,
+                "week_rub":    rev_7days,
+                "month_rub":   rev_30days,
+            },
         })
 
 
 class UserListView(CsrfExemptAPIView):
     """
-    GET /api/v1/admin/users/?status=active&page=1&limit=20
+    GET /api/v1/admin/users/?status=active&search=email&page=1&limit=20
+    Список пользователей с фильтрацией и поиском.
     """
     def get(self, request):
-        status = request.query_params.get("status")
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 20))
-        offset = (page - 1) * limit
+        status  = request.query_params.get("status")
+        search  = request.query_params.get("search", "").strip()
+        page    = int(request.query_params.get("page", 1))
+        limit   = int(request.query_params.get("limit", 20))
+        offset  = (page - 1) * limit
 
-        users = User.objects.all().order_by("-id")
+        users = User.objects.annotate(
+            active_sub_count=Count("subscriptions", filter=Q(subscriptions__status="active")),
+            total_spent=Sum("payment__amount_rub", filter=Q(payment__status="paid")),
+        ).order_by("-id")
 
         if status == "active":
             users = users.filter(subscriptions__status="active").distinct()
@@ -128,23 +178,35 @@ class UserListView(CsrfExemptAPIView):
             users = users.filter(is_banned=True)
         elif status == "verified":
             users = users.filter(is_verified=True)
+        elif status == "trial":
+            users = users.filter(has_used_trial=True)
+        elif status == "no_sub":
+            users = users.filter(active_sub_count=0)
+
+        if search:
+            users = users.filter(
+                Q(email__icontains=search) |
+                Q(username__icontains=search) |
+                Q(full_name__icontains=search)
+            )
 
         total = users.count()
         users = users[offset:offset + limit]
 
         data = []
         for u in users:
-            active_subs = u.subscriptions.filter(status="active").count()
             data.append({
-                "id": u.id,
-                "email": u.email,
-                "telegram_id": u.telegram_id,
-                "username": u.username,
-                "full_name": u.full_name,
-                "is_verified": u.is_verified,
-                "is_banned": u.is_banned,
-                "active_subscriptions": active_subs,
-                "created_at": u.created_at.isoformat(),
+                "id":                  u.id,
+                "email":               u.email,
+                "telegram_id":         u.telegram_id,
+                "username":            u.username,
+                "full_name":           u.full_name,
+                "is_verified":         u.is_verified,
+                "is_banned":           u.is_banned,
+                "has_used_trial":      u.has_used_trial,
+                "active_subscriptions": u.active_sub_count,
+                "total_spent_rub":     u.total_spent or 0,
+                "created_at":          u.created_at.isoformat(),
             })
 
         return Response({"total": total, "page": page, "limit": limit, "users": data})
@@ -152,7 +214,9 @@ class UserListView(CsrfExemptAPIView):
 
 class UserDetailView(CsrfExemptAPIView):
     """
-    GET /api/v1/admin/users/{user_id}/
+    GET  /api/v1/admin/users/{user_id}/
+    POST /api/v1/admin/users/{user_id}/  — действия: ban/unban
+    Детальная информация о пользователе: ключи, платежи, трафик.
     """
     def get(self, request, user_id):
         try:
@@ -161,121 +225,277 @@ class UserDetailView(CsrfExemptAPIView):
             return Response({"error": "Пользователь не найден"}, status=404)
 
         subscriptions = []
-        for sub in user.subscriptions.select_related("plan").all():
+        for sub in user.subscriptions.select_related("plan").order_by("-created_at"):
             traffic = {}
             if sub.panel_uuid:
                 try:
-                    email = f"u{user.id}_{sub.id}"
+                    email   = f"u{user.id}_{sub.id}"
                     traffic = panel.get_client_traffic(email)
                 except Exception:
                     traffic = {"up_gb": 0, "down_gb": 0, "total_gb": 0}
 
             subscriptions.append({
-                "id": sub.id,
-                "plan_name": sub.plan.name,
-                "status": sub.status,
+                "id":         sub.id,
+                "plan_name":  sub.plan.name,
+                "plan_key":   sub.plan.key,
+                "status":     sub.status,
                 "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
-                "sub_link": sub.sub_link,
-                "traffic": traffic,
+                "sub_link":   sub.sub_link,
+                "traffic":    traffic,
                 "created_at": sub.created_at.isoformat(),
             })
 
         payments = []
-        for p in Payment.objects.filter(user=user).order_by("-created_at")[:10]:
+        total_spent = 0
+        for p in Payment.objects.filter(user=user).select_related("plan").order_by("-created_at"):
+            if p.status == "paid":
+                total_spent += p.amount_rub
             payments.append({
-                "id": p.id,
-                "plan": p.plan.name,
-                "status": p.status,
+                "id":         p.id,
+                "plan":       p.plan.name,
+                "status":     p.status,
                 "amount_rub": p.amount_rub,
-                "method": p.method,
+                "method":     p.method,
                 "created_at": p.created_at.isoformat(),
-                "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+                "paid_at":    p.paid_at.isoformat() if p.paid_at else None,
             })
 
         return Response({
-            "id": user.id,
-            "email": user.email,
-            "telegram_id": user.telegram_id,
-            "username": user.username,
-            "full_name": user.full_name,
-            "is_verified": user.is_verified,
-            "is_banned": user.is_banned,
-            "created_at": user.created_at.isoformat(),
-            "subscriptions": subscriptions,
-            "payments": payments,
+            "id":              user.id,
+            "email":           user.email,
+            "telegram_id":     user.telegram_id,
+            "username":        user.username,
+            "full_name":       user.full_name,
+            "is_verified":     user.is_verified,
+            "is_banned":       user.is_banned,
+            "has_used_trial":  user.has_used_trial,
+            "created_at":      user.created_at.isoformat(),
+            "total_spent_rub": total_spent,
+            "keys_total":      len(subscriptions),
+            "keys_active":     sum(1 for s in subscriptions if s["status"] == "active"),
+            "subscriptions":   subscriptions,
+            "payments":        payments,
         })
+
+    def post(self, request, user_id):
+        """
+        Действия над пользователем.
+        Body: { "action": "ban" | "unban" }
+        """
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "Пользователь не найден"}, status=404)
+
+        action = request.data.get("action")
+        if action == "ban":
+            user.is_banned = True
+            user.save(update_fields=["is_banned"])
+            return Response({"success": True, "is_banned": True})
+        elif action == "unban":
+            user.is_banned = False
+            user.save(update_fields=["is_banned"])
+            return Response({"success": True, "is_banned": False})
+
+        return Response({"error": "Неизвестное действие"}, status=400)
 
 
 class SubscriptionListView(CsrfExemptAPIView):
     """
-    GET /api/v1/admin/subscriptions/?status=active&page=1&limit=20
+    GET /api/v1/admin/subscriptions/?status=active&plan=trial&page=1&limit=20
     """
     def get(self, request):
-        status = request.query_params.get("status")
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 20))
-        offset = (page - 1) * limit
+        status  = request.query_params.get("status")
+        plan    = request.query_params.get("plan")
+        page    = int(request.query_params.get("page", 1))
+        limit   = int(request.query_params.get("limit", 20))
+        offset  = (page - 1) * limit
 
         subs = Subscription.objects.select_related("user", "plan").order_by("-created_at")
 
         if status:
             subs = subs.filter(status=status)
+        if plan:
+            subs = subs.filter(plan__key=plan)
 
         total = subs.count()
-        subs = subs[offset:offset + limit]
+        subs  = subs[offset:offset + limit]
 
         data = []
         for sub in subs:
             data.append({
-                "id": sub.id,
-                "user_id": sub.user.id,
+                "id":         sub.id,
+                "user_id":    sub.user.id,
                 "user_email": sub.user.email,
-                "telegram_id": sub.user.telegram_id,
-                "plan_name": sub.plan.name,
-                "status": sub.status,
+                "telegram_id":sub.user.telegram_id,
+                "plan_name":  sub.plan.name,
+                "plan_key":   sub.plan.key,
+                "status":     sub.status,
                 "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
-                "sub_link": sub.sub_link,
+                "sub_link":   sub.sub_link,
                 "created_at": sub.created_at.isoformat(),
             })
 
         return Response({"total": total, "page": page, "limit": limit, "subscriptions": data})
 
 
+class PaymentStatsView(CsrfExemptAPIView):
+    """
+    GET /api/v1/admin/payments/stats/?from=2026-01-01&to=2026-05-30
+    Статистика по доходам за произвольный период и за всё время.
+    """
+    def get(self, request):
+        date_from = request.query_params.get("from")
+        date_to   = request.query_params.get("to")
+        today     = timezone.now().date()
+
+        paid_qs = Payment.objects.filter(status="paid")
+
+        period_revenue    = None
+        period_count      = None
+        if date_from and date_to:
+            try:
+                from datetime import date
+                df = date.fromisoformat(date_from)
+                dt = date.fromisoformat(date_to)
+                period_qs      = paid_qs.filter(paid_at__date__gte=df, paid_at__date__lte=dt)
+                period_revenue = period_qs.aggregate(t=Sum("amount_rub"))["t"] or 0
+                period_count   = period_qs.count()
+            except ValueError:
+                return Response({"error": "Неверный формат даты, используй YYYY-MM-DD"}, status=400)
+
+        total_revenue = paid_qs.aggregate(t=Sum("amount_rub"))["t"] or 0
+        total_count   = paid_qs.count()
+
+        rev_today  = paid_qs.filter(paid_at__date=today).aggregate(t=Sum("amount_rub"))["t"] or 0
+        rev_7days  = paid_qs.filter(paid_at__date__gte=today - timedelta(days=7)).aggregate(t=Sum("amount_rub"))["t"] or 0
+        rev_30days = paid_qs.filter(paid_at__date__gte=today - timedelta(days=30)).aggregate(t=Sum("amount_rub"))["t"] or 0
+
+        by_method = list(
+            paid_qs.values("method")
+            .annotate(total=Sum("amount_rub"), count=Count("id"))
+            .order_by("-total")
+        )
+
+        by_plan = list(
+            paid_qs.values("plan__name", "plan__key")
+            .annotate(total=Sum("amount_rub"), count=Count("id"))
+            .order_by("-total")
+        )
+
+        daily = []
+        for i in range(29, -1, -1):
+            d   = today - timedelta(days=i)
+            rev = paid_qs.filter(paid_at__date=d).aggregate(t=Sum("amount_rub"))["t"] or 0
+            cnt = paid_qs.filter(paid_at__date=d).count()
+            daily.append({"date": d.isoformat(), "revenue_rub": rev, "count": cnt})
+
+        result = {
+            "all_time": {
+                "revenue_rub": total_revenue,
+                "payments":    total_count,
+            },
+            "today": {
+                "revenue_rub": rev_today,
+            },
+            "week": {
+                "revenue_rub": rev_7days,
+            },
+            "month": {
+                "revenue_rub": rev_30days,
+            },
+            "by_method": by_method,
+            "by_plan":   by_plan,
+            "daily_30d": daily,
+        }
+
+        if period_revenue is not None:
+            result["period"] = {
+                "from":        date_from,
+                "to":          date_to,
+                "revenue_rub": period_revenue,
+                "payments":    period_count,
+            }
+
+        return result and Response(result)
+
+
+class PaymentListView(CsrfExemptAPIView):
+    """
+    GET /api/v1/admin/payments/?status=paid&page=1&limit=20
+    Список всех платежей.
+    """
+    def get(self, request):
+        status = request.query_params.get("status")
+        page   = int(request.query_params.get("page", 1))
+        limit  = int(request.query_params.get("limit", 20))
+        offset = (page - 1) * limit
+
+        payments = Payment.objects.select_related("user", "plan").order_by("-created_at")
+
+        if status:
+            payments = payments.filter(status=status)
+
+        total    = payments.count()
+        payments = payments[offset:offset + limit]
+
+        data = []
+        for p in payments:
+            data.append({
+                "id":          p.id,
+                "user_id":     p.user.id,
+                "user_email":  p.user.email,
+                "telegram_id": p.user.telegram_id,
+                "plan_name":   p.plan.name,
+                "status":      p.status,
+                "amount_rub":  p.amount_rub,
+                "method":      p.method,
+                "created_at":  p.created_at.isoformat(),
+                "paid_at":     p.paid_at.isoformat() if p.paid_at else None,
+            })
+
+        return Response({"total": total, "page": page, "limit": limit, "payments": data})
+
+
 class TrafficStatsView(CsrfExemptAPIView):
     """
     GET /api/v1/admin/traffic/
+    Трафик по всем активным подпискам + топ-5 по потреблению.
     """
     def get(self, request):
-        active_subs = Subscription.objects.filter(
-            status="active"
-        ).select_related("user", "plan")
-
+        active_subs  = Subscription.objects.filter(status="active").select_related("user", "plan")
         traffic_list = []
+
         for sub in active_subs:
             try:
-                email = f"u{sub.user.id}_{sub.id}"
+                email   = f"u{sub.user.id}_{sub.id}"
                 traffic = panel.get_client_traffic(email)
                 if traffic["total_gb"] > 0:
                     traffic_list.append({
-                        "user_id": sub.user.id,
-                        "email": sub.user.email,
-                        "telegram_id": sub.user.telegram_id,
+                        "user_id":         sub.user.id,
+                        "email":           sub.user.email,
+                        "telegram_id":     sub.user.telegram_id,
                         "subscription_id": sub.id,
-                        "plan_name": sub.plan.name,
-                        "up_gb": traffic["up_gb"],
-                        "down_gb": traffic["down_gb"],
-                        "total_gb": traffic["total_gb"],
+                        "plan_name":       sub.plan.name,
+                        "plan_key":        sub.plan.key,
+                        "up_gb":           traffic["up_gb"],
+                        "down_gb":         traffic["down_gb"],
+                        "total_gb":        traffic["total_gb"],
                     })
             except Exception:
                 continue
 
         traffic_list.sort(key=lambda x: x["total_gb"], reverse=True)
-        top5 = traffic_list[:5]
 
-        total_gb = round(sum(t["total_gb"] for t in traffic_list), 2)
+        total_gb    = round(sum(t["total_gb"]   for t in traffic_list), 2)
+        total_up    = round(sum(t["up_gb"]      for t in traffic_list), 2)
+        total_down  = round(sum(t["down_gb"]    for t in traffic_list), 2)
 
         return Response({
-            "total_traffic_gb": total_gb,
+            "total_traffic_gb":    total_gb,
+            "total_upload_gb":     total_up,
+            "total_download_gb":   total_down,
             "active_subscriptions": active_subs.count(),
-            "top5": top5,
+            "top5":                traffic_list[:5],
+            "all":                 traffic_list,
         })
