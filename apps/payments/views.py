@@ -1,13 +1,12 @@
 from .models import Payment
 from apps.subscriptions.models import Subscription, Plan
-from django.utils import timezone
-from datetime import timedelta
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from apps.users.models import User
 from apps.utils.bot_notify import notify_bot
 from apps.utils.views import CsrfExemptAPIView
 from yookassa import Configuration, Payment as YooPayment
+from ..utils.activate_sub import activate_subscription
 import os
 import uuid
 import json
@@ -18,58 +17,6 @@ Configuration.secret_key = os.getenv("YOOKASSA_SECRET_KEY")
 
 YOOKASSA_RETURN_URL_BOT = os.getenv("YOOKASSA_RETURN_URL_BOT", "https://t.me/fastnet_serv_bot")
 YOOKASSA_RETURN_URL_WEB = os.getenv("YOOKASSA_RETURN_URL_WEB", "https://fast-net.online/profile")
-
-def activate_subscription(payment: Payment):
-    from apps.vpn.panel_client import panel
-
-    if payment.subscription_id:
-        sub = payment.subscription
-
-        if sub.status == "active" and sub.expires_at:
-            sub.expires_at = sub.expires_at + timedelta(days=payment.plan.days)
-        else:
-            sub.expires_at = timezone.now() + timedelta(days=payment.plan.days)
-
-        panel.renew_subscription(
-            telegram_id=payment.user.telegram_id,
-            subscription_id=sub.id,
-            panel_uuid=sub.panel_uuid,
-            sub_id=sub.sub_id,
-            days=payment.plan.days
-        )
-
-        sub.status = "active"
-        sub.save()
-
-        payment.status = "paid"
-        payment.paid_at = timezone.now()
-        payment.save()
-
-        return sub
-
-    else:
-        sub = Subscription.objects.create(
-            user=payment.user,
-            plan=payment.plan,
-            status="pending"
-        )
-        result = panel.create_subscription(
-            user_id=payment.user.id,
-            subscription_id=sub.id,
-            days=payment.plan.days
-        )
-        sub.panel_uuid = result["panel_uuid"]
-        sub.sub_id = result["sub_id"]
-        sub.status = "active"
-        sub.expires_at = timezone.now() + timedelta(days=payment.plan.days)
-        sub.save()
-
-        payment.subscription = sub
-        payment.status = "paid"
-        payment.paid_at = timezone.now()
-        payment.save()
-
-        return sub
 
 
 class YookassaPaymentCreateView(CsrfExemptAPIView):

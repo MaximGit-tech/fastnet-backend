@@ -9,6 +9,7 @@ from apps.utils.views import CsrfExemptAPIView
 from .models import User, EmailVerification
 from django.template.loader import render_to_string
 from apps.utils.authentication import get_user_from_request
+from ..utils.activate_sub import activate_subscription
 
 resend.api_key = settings.RESEND_API_KEY
 
@@ -100,6 +101,22 @@ class VerifyEmailView(CsrfExemptAPIView):
         user.save()
 
         link_token = user.generate_link_token()
+
+        trial_sub  = None
+        trial_link = None
+
+        if not user.has_used_trial:
+            from apps.subscriptions.trial import activate_trial
+            from apps.utils.bot_notify import notify_bot
+
+            trial_sub = activate_trial(user)
+            if trial_sub:
+                trial_link = trial_sub.sub_link
+                notify_bot(user, "trial_activated", {
+                    "sub_link":   trial_link,
+                    "expires_at": trial_sub.expires_at.isoformat(),
+                })
+
 
         return Response({
             "success":    True,

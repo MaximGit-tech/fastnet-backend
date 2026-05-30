@@ -10,6 +10,7 @@ class User(models.Model):
     full_name   = models.CharField(max_length=128, blank=True)
     link_token  = models.CharField(max_length=64, blank=True, db_index=True)
     is_banned   = models.BooleanField(default=False)
+    has_used_trial = models.BooleanField(default=False)
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
 
