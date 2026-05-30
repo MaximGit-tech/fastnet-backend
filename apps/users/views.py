@@ -9,7 +9,6 @@ from apps.utils.views import CsrfExemptAPIView
 from .models import User, EmailVerification
 from django.template.loader import render_to_string
 from apps.utils.authentication import get_user_from_request
-from ..utils.activate_sub import activate_subscription
 
 resend.api_key = settings.RESEND_API_KEY
 
@@ -23,7 +22,8 @@ class RegisterView(CsrfExemptAPIView):
     POST /api/v1/users/register/
     """
     def post(self, request):
-        email = request.data.get("email", "").lower().strip()
+        email     = request.data.get("email", "").lower().strip()
+        ref_token = request.data.get("ref_token", "").strip()
 
         if not email or "@" not in email:
             return Response({"error": "Некорректный email"}, status=400)
@@ -37,14 +37,19 @@ class RegisterView(CsrfExemptAPIView):
                 "is_verified":    True,
             })
 
-        code = generate_code()
+        if created and ref_token and not user.referred_by:
+            referrer = (
+                User.objects.filter(ref_token_bot=ref_token, is_verified=True).first()
+                or User.objects.filter(ref_token_web=ref_token, is_verified=True).first()
+            )
+            if referrer and referrer.id != user.id:
+                user.referred_by = referrer
+                user.save(update_fields=["referred_by"])
 
+        code = generate_code()
         EmailVerification.objects.filter(user=user, is_used=False).update(is_used=True)
 
-        html = render_to_string(
-            "verification_code.html",
-            {"code": code}
-        )
+        html = render_to_string("verification_code.html", {"code": code})
         EmailVerification.objects.create(
             user=user,
             code=code,
@@ -52,16 +57,17 @@ class RegisterView(CsrfExemptAPIView):
         )
 
         resend.Emails.send({
-            "from": settings.EMAIL_FROM,
-            "to": [user.email],
+            "from":    settings.EMAIL_FROM,
+            "to":      [user.email],
             "subject": "FastNet код подтверждения",
-            "html": html
+            "html":    html
         })
 
         return Response({
             "user_id":        user.id,
             "already_exists": not created,
             "is_verified":    False,
+            "has_referrer":   user.referred_by_id is not None,
         })
 
 
@@ -100,29 +106,35 @@ class VerifyEmailView(CsrfExemptAPIView):
         user.full_name   = full_name
         user.save()
 
+        user.generate_ref_tokens()
+
         link_token = user.generate_link_token()
 
+        bonus_sub  = None
         trial_sub  = None
-        trial_link = None
 
-        if not user.has_used_trial:
+        if user.referred_by and not user.has_used_trial:
+            from apps.subscriptions.referral import give_friend_bonus
+            bonus_sub = give_friend_bonus(user)
+
+        elif not user.has_used_trial:
             from apps.subscriptions.trial import activate_trial
             from apps.utils.bot_notify import notify_bot
-
             trial_sub = activate_trial(user)
             if trial_sub:
-                trial_link = trial_sub.sub_link
                 notify_bot(user, "trial_activated", {
-                    "sub_link":   trial_link,
+                    "sub_link":   trial_sub.sub_link,
                     "expires_at": trial_sub.expires_at.isoformat(),
                 })
-
 
         return Response({
             "success":    True,
             "user_id":    user.id,
             "email":      user.email,
             "link_token": link_token,
+            "ref_token_bot": user.ref_token_bot,
+            "ref_token_web": user.ref_token_web,
+            "referral_bonus": bonus_sub is not None,
         })
 
 
@@ -139,8 +151,7 @@ class ResendCodeView(CsrfExemptAPIView):
             return Response({"error": "Не найден"}, status=404)
 
         last = EmailVerification.objects.filter(
-            user=user,
-            is_used=False
+            user=user, is_used=False
         ).order_by("-created_at").first()
 
         if last and (timezone.now() - last.created_at).total_seconds() < 60:
@@ -150,13 +161,9 @@ class ResendCodeView(CsrfExemptAPIView):
             )
 
         code = generate_code()
-
         EmailVerification.objects.filter(user=user, is_used=False).update(is_used=True)
 
-        html = render_to_string(
-            "verification_code.html",
-            {"code": code}
-        )
+        html = render_to_string("verification_code.html", {"code": code})
         EmailVerification.objects.create(
             user=user,
             code=code,
@@ -164,10 +171,10 @@ class ResendCodeView(CsrfExemptAPIView):
         )
 
         resend.Emails.send({
-            "from": settings.EMAIL_FROM,
-            "to": [user.email],
+            "from":    settings.EMAIL_FROM,
+            "to":      [user.email],
             "subject": "FastNet код подтверждения",
-            "html": html
+            "html":    html
         })
 
         return Response({"success": True})
@@ -183,27 +190,61 @@ class GetUserView(CsrfExemptAPIView):
             return err
 
         return Response({
-            "user_id":     user.id,
-            "email":       user.email,
-            "is_verified": user.is_verified,
-            "is_banned":   user.is_banned,
-            "telegram_id": user.telegram_id,
+            "user_id":       user.id,
+            "email":         user.email,
+            "is_verified":   user.is_verified,
+            "is_banned":     user.is_banned,
+            "telegram_id":   user.telegram_id,
+            "ref_token_bot": user.ref_token_bot,
+            "ref_token_web": user.ref_token_web,
         })
-        
+
+
+class GetRefLinksView(CsrfExemptAPIView):
+    """
+    GET /api/v1/users/ref-links/
+    """
+    def get(self, request):
+        user, err = get_user_from_request(request)
+        if err:
+            return err
+
+        bot_username = settings.TELEGRAM_BOT_USERNAME
+        site_url     = settings.SITE_URL 
+
+        bot_link  = f"https://t.me/{bot_username}?start=ref_{user.ref_token_bot}"
+        web_link  = f"{site_url}/register?ref={user.ref_token_web}"
+
+        referrals_count = user.referrals.filter(is_verified=True).count()
+
+        return Response({
+            "bot_link":        bot_link,
+            "web_link":        web_link,
+            "referrals_count": referrals_count,
+        })
+
+
 class WebLoginView(CsrfExemptAPIView):
     """
     POST /api/v1/users/web/login/
     """
     def post(self, request):
-        email = request.data.get("email", "").lower().strip()
+        email     = request.data.get("email", "").lower().strip()
+        ref_token = request.data.get("ref", "").strip()
 
         if not email or "@" not in email:
             return Response({"error": "Некорректный email"}, status=400)
 
-        user, _ = User.objects.get_or_create(email=email)
+        user, created = User.objects.get_or_create(email=email)
 
         if user.is_banned:
             return Response({"error": "Аккаунт заблокирован"}, status=403)
+
+        if created and ref_token and not user.referred_by:
+            referrer = User.objects.filter(ref_token_web=ref_token, is_verified=True).first()
+            if referrer and referrer.id != user.id:
+                user.referred_by = referrer
+                user.save(update_fields=["referred_by"])
 
         last = EmailVerification.objects.filter(
             user=user, is_used=False
@@ -223,10 +264,10 @@ class WebLoginView(CsrfExemptAPIView):
         )
 
         resend.Emails.send({
-            "from": settings.EMAIL_FROM,
-            "to": [user.email],
+            "from":    settings.EMAIL_FROM,
+            "to":      [user.email],
             "subject": "FastNet код подтверждения",
-            "html": html
+            "html":    html
         })
 
         return Response({"user_id": user.id})
@@ -240,7 +281,7 @@ class WebVerifyView(CsrfExemptAPIView):
         from rest_framework_simplejwt.tokens import RefreshToken
 
         user_id = request.data.get("user_id")
-        code = request.data.get("code", "").strip()
+        code    = request.data.get("code", "").strip()
 
         if not user_id or not code:
             return Response({"error": "user_id и code обязательны"}, status=400)
@@ -269,26 +310,25 @@ class WebVerifyView(CsrfExemptAPIView):
         user.is_verified = True
         user.save(update_fields=["is_verified"])
 
-        if not user.has_used_trial:
-            from apps.subscriptions.trial import activate_trial
-            from apps.utils.bot_notify import notify_bot
+        user.generate_ref_tokens()
 
-            trial_sub = activate_trial(user)
-            if trial_sub:
-                notify_bot(user, "trial_activated", {
-                    "sub_link":   trial_sub.sub_link,
-                    "expires_at": trial_sub.expires_at.isoformat(),
-                })
+        if user.referred_by and not user.has_used_trial:
+            from apps.subscriptions.referral import give_friend_bonus
+            give_friend_bonus(user)
+
+        elif not user.has_used_trial:
+            from apps.subscriptions.trial import activate_trial
+            activate_trial(user)
 
         refresh = RefreshToken()
         refresh["user_id"] = user.id
-        refresh["email"] = user.email
+        refresh["email"]   = user.email
 
         return Response({
-            "access": str(refresh.access_token),
+            "access":  str(refresh.access_token),
             "refresh": str(refresh),
             "user_id": user.id,
-            "email": user.email,
+            "email":   user.email,
         })
 
 
@@ -311,6 +351,25 @@ class WebRefreshView(CsrfExemptAPIView):
             return Response({"error": "Невалидный или истёкший токен"}, status=401)
     
 
+class GetReferrerInfoView(CsrfExemptAPIView):
+    """
+    GET /api/v1/users/referrer-info/?ref_token=<token>
+    """
+    def get(self, request):
+        ref_token = request.query_params.get("ref_token", "").strip()
+        if not ref_token:
+            return Response({"error": "ref_token обязателен"}, status=400)
+ 
+        referrer = (
+            User.objects.filter(ref_token_bot=ref_token).first()
+            or User.objects.filter(ref_token_web=ref_token).first()
+        )
+ 
+        if not referrer:
+            return Response({"error": "Реферер не найден"}, status=404)
+ 
+        name = referrer.full_name or referrer.username or referrer.email.split("@")[0]
+        return Response({"name": name})
 
 
 

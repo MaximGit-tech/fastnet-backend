@@ -6,15 +6,14 @@ from ..payments.models import Payment
 
 def activate_subscription(payment: Payment):
     from apps.vpn.panel_client import panel
+    from apps.subscriptions.referral import give_referrer_bonus
 
     if payment.subscription_id:
         sub = payment.subscription
-
         if sub.status == "active" and sub.expires_at:
             sub.expires_at = sub.expires_at + timedelta(days=payment.plan.days)
         else:
             sub.expires_at = timezone.now() + timedelta(days=payment.plan.days)
-
         panel.renew_subscription(
             telegram_id=payment.user.telegram_id,
             subscription_id=sub.id,
@@ -22,16 +21,11 @@ def activate_subscription(payment: Payment):
             sub_id=sub.sub_id,
             days=payment.plan.days
         )
-
         sub.status = "active"
         sub.save()
-
         payment.status = "paid"
         payment.paid_at = timezone.now()
         payment.save()
-
-        return sub
-
     else:
         sub = Subscription.objects.create(
             user=payment.user,
@@ -44,14 +38,23 @@ def activate_subscription(payment: Payment):
             days=payment.plan.days
         )
         sub.panel_uuid = result["panel_uuid"]
-        sub.sub_id = result["sub_id"]
-        sub.status = "active"
+        sub.sub_id     = result["sub_id"]
+        sub.status     = "active"
         sub.expires_at = timezone.now() + timedelta(days=payment.plan.days)
         sub.save()
-
         payment.subscription = sub
-        payment.status = "paid"
+        payment.status  = "paid"
         payment.paid_at = timezone.now()
         payment.save()
 
-        return sub
+    user = payment.user
+    if (
+        user.referred_by
+        and not user.referred_by.referral_bonus_given
+    ):
+        give_referrer_bonus(
+            referrer=user.referred_by,
+            friend=user,
+        )
+
+    return sub
