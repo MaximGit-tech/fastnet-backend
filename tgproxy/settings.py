@@ -25,7 +25,14 @@ import os
 
 SECRET_KEY = os.getenv('SECRET_KEY', '')
 DEBUG = os.getenv("DEBUG", "False") == "True"
-ALLOWED_HOSTS = ["*"] # на время разработки
+ALLOWED_HOSTS = [
+    "fast-net.online",
+    "www.fast-net.online",
+    "api.fast-net.online",
+    "admin.fast-net.online",
+    "127.0.0.1",
+    "localhost",
+]
 
 # Email
 EMAIL_FROM = os.getenv('EMAIL_FROM')
@@ -37,6 +44,10 @@ CELERY_RESULT_BACKEND = "django-db"
 CELERY_TASK_IGNORE_RESULT = True
 CELERY_TIMEZONE = "Europe/Moscow"
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# Referral
+TELEGRAM_BOT_USERNAME = os.getenv('TELEGRAM_BOT_USERNAME')
+SITE_URL = os.getenv('SITE_URL')
 
 from celery.schedules import crontab
 
