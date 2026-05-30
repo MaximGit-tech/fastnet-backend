@@ -50,7 +50,10 @@ def _create_subscription(user, plan, days: int) -> Optional[Subscription]:
 def _extend_subscription(sub: Subscription, days: int) -> Subscription:
     try:
         panel.renew_subscription(
+            telegram_id=sub.user.telegram_id,
             subscription_id=sub.id,
+            panel_uuid=sub.panel_uuid,
+            sub_id=sub.sub_id,
             days=days,
         )
     except Exception as e:

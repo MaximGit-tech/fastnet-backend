@@ -36,8 +36,8 @@ class RegisterView(CsrfExemptAPIView):
                 "already_exists": True,
                 "is_verified":    True,
             })
-
-        if created and ref_token and not user.referred_by:
+        
+        if not user.is_verified and ref_token and not user.referred_by_id:
             referrer = (
                 User.objects.filter(ref_token_bot=ref_token, is_verified=True).first()
                 or User.objects.filter(ref_token_web=ref_token, is_verified=True).first()
@@ -208,6 +208,9 @@ class GetRefLinksView(CsrfExemptAPIView):
         user, err = get_user_from_request(request)
         if err:
             return err
+
+        if not user.ref_token_bot or not user.ref_token_web:
+            user.generate_ref_tokens()
 
         bot_username = settings.TELEGRAM_BOT_USERNAME
         site_url     = settings.SITE_URL 

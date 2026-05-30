@@ -3,7 +3,7 @@ from apps.users.models import User
 import os
 
 class Plan(models.Model):
-    key = models.CharField(max_length=16, unique=True)
+    key = models.CharField(max_length=32, unique=True)
     name = models.CharField(max_length=64)
     days = models.IntegerField()
     price_rub = models.IntegerField()
