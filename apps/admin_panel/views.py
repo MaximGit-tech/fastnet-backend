@@ -4,7 +4,8 @@ from datetime import timedelta
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from rest_framework.response import Response
-from .auth import check_password, AdminAuthMixin
+from django.contrib.auth.hashers import check_password
+from .auth import AdminAuthMixin
 from .models import Admin
 from apps.utils.views import CsrfExemptAPIView
 from apps.users.models import User
