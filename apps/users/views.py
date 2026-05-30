@@ -269,6 +269,17 @@ class WebVerifyView(CsrfExemptAPIView):
         user.is_verified = True
         user.save(update_fields=["is_verified"])
 
+        if not user.has_used_trial:
+            from apps.subscriptions.trial import activate_trial
+            from apps.utils.bot_notify import notify_bot
+
+            trial_sub = activate_trial(user)
+            if trial_sub:
+                notify_bot(user, "trial_activated", {
+                    "sub_link":   trial_sub.sub_link,
+                    "expires_at": trial_sub.expires_at.isoformat(),
+                })
+
         refresh = RefreshToken()
         refresh["user_id"] = user.id
         refresh["email"] = user.email
