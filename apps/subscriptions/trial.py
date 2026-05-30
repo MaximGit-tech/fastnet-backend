@@ -10,7 +10,7 @@ TRIAL_DAYS = 3
 TRIAL_PLAN_KEY = "trial"
 
 
-def activate_trial(user) -> Subscription | None:
+def activate_trial(user):
     if user.has_used_trial:
         return None
 
