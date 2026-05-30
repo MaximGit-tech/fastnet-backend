@@ -49,6 +49,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.subscriptions.tasks.notify_expiring_subscriptions",
         "schedule": crontab(hour="10", minute="0"),
     },
+    "notify-trial-expiring": {
+        "task": "apps.subscriptions.tasks.notify_trial_expiring",
+        "schedule": crontab(hour="10", minute="0"),
+    },
 }
 
 # Application definition

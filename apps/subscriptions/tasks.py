@@ -57,3 +57,26 @@ def notify_expiring_subscriptions():
 
     logger.info(f"Отправлено уведомлений об истечении: {count}")
     return count
+
+
+@shared_task
+def notify_trial_expiring():
+    from apps.subscriptions.models import Subscription
+    from apps.utils.bot_notify import notify_bot
+    in_1_day = timezone.now() + timedelta(days=1)
+    expiring = Subscription.objects.filter(
+        status="active",
+        plan__key="trial",
+        expires_at__date=in_1_day.date()
+    ).select_related("user", "plan")
+    count = 0
+    for sub in expiring:
+        try:
+            notify_bot(sub.user, "trial_expiring", {
+                "expires_at": sub.expires_at.isoformat()
+            })
+            count += 1
+        except Exception as e:
+            logger.error(f"Ошибка уведомления триала {sub.id}: {e}")
+    logger.info(f"Отправлено уведомлений о конце триала: {count}")
+    return count
