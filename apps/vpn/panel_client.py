@@ -188,7 +188,7 @@ class PanelClient:
             type=tcp              транспорт
             security=reality      тип шифрования
             pbk=                  публичный ключ сервера (из 3x-ui → stream_settings)
-            fp=chrome             fingerprint браузера
+            fp=firefox          fingerprint браузера
             sni=yahoo.com         маскировочный домен
             sid=                  short ID (из 3x-ui → stream_settings)
             spx=%2F               spider path
@@ -198,7 +198,7 @@ class PanelClient:
             f"type=tcp"
             f"&security=reality"
             f"&pbk={DE_PUBLIC_KEY}"
-            f"&fp=chrome"
+            f"&fp=firefox"
             f"&sni={DE_SNI}"
             f"&sid={DE_SHORT_ID}"
             f"&spx=%2F"
@@ -219,7 +219,7 @@ class PanelClient:
             f"type=tcp"
             f"&security=reality"
             f"&pbk={RU_PUBLIC_KEY}"
-            f"&fp=chrome"
+            f"&fp=firefox"
             f"&sni={RU_SNI}"
             f"&sid={RU_SHORT_ID}"
             f"&spx=%2F"
