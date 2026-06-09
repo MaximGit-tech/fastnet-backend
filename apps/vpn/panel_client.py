@@ -246,104 +246,111 @@ class PanelClient:
         de_uuid, de_host, de_port, de_params = parse_vless(de_key)
         ru_uuid, ru_host, ru_port, ru_params = parse_vless(ru_key)
 
-        config = {
-            "log": {"loglevel": "warning"},
-            "remarks": "Fast Net ⚡",
-            "inbounds": [
-                {
-                    "listen": "127.0.0.1",
-                    "port": 1080,
-                    "protocol": "socks",
-                    "settings": {"auth": "noauth", "udp": True},
-                    "sniffing": {
-                        "enabled": True,
-                        "destOverride": ["http", "tls", "quic"],
-                        "routeOnly": True
-                    },
-                    "tag": "socks"
-                }
-            ],
-            "outbounds": [
-                {
-                    "tag": "🇩🇪 Германия",
-                    "protocol": "vless",
-                    "settings": {
-                        "vnext": [{
-                            "address": de_host,
-                            "port": de_port,
-                            "users": [{
-                                "id": de_uuid,
-                                "encryption": "none",
-                                "flow": "xtls-rprx-vision"
-                            }]
-                        }]
-                    },
-                    "streamSettings": {
-                        "network": "tcp",
-                        "security": "reality",
-                        "realitySettings": {
-                            "fingerprint": de_params.get("fp", "firefox"),
-                            "publicKey": de_params.get("pbk", ""),
-                            "serverName": de_params.get("sni", ""),
-                            "shortId": de_params.get("sid", ""),
-                            "spiderX": "/"
-                        },
-                        "tcpSettings": {}
-                    }
-                },
-                {
-                    "tag": "🇷🇺 Россия",
-                    "protocol": "vless",
-                    "settings": {
-                        "vnext": [{
-                            "address": ru_host,
-                            "port": ru_port,
-                            "users": [{
-                                "id": ru_uuid,
-                                "encryption": "none",
-                                "flow": "xtls-rprx-vision"
-                            }]
-                        }]
-                    },
-                    "streamSettings": {
-                        "network": "tcp",
-                        "security": "reality",
-                        "realitySettings": {
-                            "fingerprint": ru_params.get("fp", "firefox"),
-                            "publicKey": ru_params.get("pbk", ""),
-                            "serverName": ru_params.get("sni", ""),
-                            "shortId": ru_params.get("sid", ""),
-                            "spiderX": "/"
-                        },
-                        "tcpSettings": {}
-                    }
-                },
-                {
-                    "tag": "direct",
-                    "protocol": "freedom",
-                    "settings": {"domainStrategy": "UseIP"}
-                },
-                {
-                    "tag": "block",
-                    "protocol": "blackhole"
-                }
-            ],
-            "routing": {
-                "domainStrategy": "IPIfNonMatch",
-                "rules": [
-                    {
-                        "domain": ["geosite:category-ru"],
-                        "outboundTag": "direct"
-                    },
-                    {
-                        "ip": ["geoip:ru", "geoip:private"],
-                        "outboundTag": "direct"
-                    }
-                ]
+        routing_rules = [
+            {
+                "domain": ["geosite:category-ru"],
+                "outboundTag": "direct"
+            },
+            {
+                "ip": ["geoip:ru", "geoip:private"],
+                "outboundTag": "direct"
             }
-        }
+        ]
 
-        return json.dumps(config, ensure_ascii=False).encode("utf-8")
+        def build_config(uuid, host, port, params, remarks):
+            return {
+                "log": {"loglevel": "warning"},
+                "remarks": remarks,
+                "dns": {
+                    "hosts": {"domain:googleapis.cn": "googleapis.com"},
+                    "queryStrategy": "UseIPv4",
+                    "servers": [
+                        "1.1.1.1",
+                        {"address": "8.8.8.8", "domains": [], "port": 53}
+                    ]
+                },
+                "inbounds": [
+                    {
+                        "listen": "127.0.0.1",
+                        "port": 1080,
+                        "protocol": "socks",
+                        "settings": {"auth": "noauth", "udp": True},
+                        "sniffing": {
+                            "enabled": True,
+                            "destOverride": ["http", "tls", "quic"],
+                            "routeOnly": True
+                        },
+                        "tag": "socks"
+                    }
+                ],
+                "outbounds": [
+                    {
+                        "protocol": "vless",
+                        "settings": {
+                            "vnext": [{
+                                "address": host,
+                                "port": port,
+                                "users": [{
+                                    "id": uuid,
+                                    "encryption": "none",
+                                    "flow": "xtls-rprx-vision",
+                                    "level": 8
+                                }]
+                            }]
+                        },
+                        "streamSettings": {
+                            "network": "tcp",
+                            "security": "reality",
+                            "realitySettings": {
+                                "fingerprint": params.get("fp", "firefox"),
+                                "publicKey": params.get("pbk", ""),
+                                "serverName": params.get("sni", ""),
+                                "shortId": params.get("sid", ""),
+                                "show": False,
+                                "spiderX": "/"
+                            },
+                            "tcpSettings": {"header": {"type": "none"}}
+                        },
+                        "tag": "proxy"
+                    },
+                    {
+                        "protocol": "freedom",
+                        "settings": {"domainStrategy": "UseIP"},
+                        "tag": "direct"
+                    },
+                    {
+                        "protocol": "blackhole",
+                        "settings": {"response": {"type": "http"}},
+                        "tag": "block"
+                    },
+                    {
+                        "protocol": "dns",
+                        "tag": "dns-out"
+                    }
+                ],
+                "policy": {},
+                "routing": {
+                    "domainStrategy": "IPIfNonMatch",
+                    "rules": [
+                        {"inboundTag": ["socks"], "outboundTag": "proxy", "port": "53"},
+                        {"ip": ["1.1.1.1"], "outboundTag": "proxy", "port": "53"},
+                        {"ip": ["8.8.8.8"], "outboundTag": "direct", "port": "53"},
+                        {"domain": ["geosite:category-ru"], "outboundTag": "direct"},
+                        {"ip": ["geoip:ru", "geoip:private"], "outboundTag": "direct"},
+                        {"inboundTag": ["dns-in"], "outboundTag": "dns-out"}
+                    ]
+                }
+            }
+
+        de_config = build_config(de_uuid, de_host, de_port, de_params, "🇩🇪 Германия")
+        ru_config = build_config(ru_uuid, ru_host, ru_port, ru_params, "🇷🇺 Россия")
+
+        # Два JSON конфига разделённых переносом строки — каждый отдельный профиль
+        content = (
+            json.dumps(de_config, ensure_ascii=False) + "\n" +
+            json.dumps(ru_config, ensure_ascii=False) + "\n"
+        )
+        return base64.b64encode(content.encode("utf-8"))
 
     def _write_sub_file(self, sub_id: str, content: bytes) -> None:
         """
