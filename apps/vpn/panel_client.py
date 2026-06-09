@@ -228,19 +228,122 @@ class PanelClient:
         return f"vless://{RU_UUID}@{RU_IP}:{RU_PORT}?{params}#🇷🇺 Россия"
 
     def _build_subscription_content(self, client_uuid: str) -> bytes:
-        """
-        Формирует содержимое файла подписки.
+        import json
+        import urllib.parse
 
-        Формат который понимают happ и v2rayTun:
-            base64(ключ1\nключ2\n...)
+        de_key = self._build_de_key(client_uuid)
+        ru_key = self._build_ru_key()
 
-        Приложение декодирует base64 и парсит каждую строку как отдельный ключ.
-        Каждый ключ отображается как отдельный профиль в списке серверов.
-        """
-        de_key  = self._build_de_key(client_uuid)
-        ru_key  = self._build_ru_key()
-        content = f"# profile-title: Fast Net ⚡\n{de_key}\n{ru_key}\n"
-        return base64.b64encode(content.encode("utf-8"))
+        def parse_vless(key):
+            url = key.split("vless://")[1]
+            uuid, rest = url.split("@")
+            host_port, params_fragment = rest.split("?", 1)
+            params_str = params_fragment.split("#")[0]
+            params = dict(urllib.parse.parse_qsl(params_str))
+            host, port = host_port.rsplit(":", 1)
+            return uuid, host, int(port), params
+
+        de_uuid, de_host, de_port, de_params = parse_vless(de_key)
+        ru_uuid, ru_host, ru_port, ru_params = parse_vless(ru_key)
+
+        config = {
+            "log": {"loglevel": "warning"},
+            "remarks": "Fast Net ⚡",
+            "inbounds": [
+                {
+                    "listen": "127.0.0.1",
+                    "port": 1080,
+                    "protocol": "socks",
+                    "settings": {"auth": "noauth", "udp": True},
+                    "sniffing": {
+                        "enabled": True,
+                        "destOverride": ["http", "tls", "quic"],
+                        "routeOnly": True
+                    },
+                    "tag": "socks"
+                }
+            ],
+            "outbounds": [
+                {
+                    "tag": "🇩🇪 Германия",
+                    "protocol": "vless",
+                    "settings": {
+                        "vnext": [{
+                            "address": de_host,
+                            "port": de_port,
+                            "users": [{
+                                "id": de_uuid,
+                                "encryption": "none",
+                                "flow": "xtls-rprx-vision"
+                            }]
+                        }]
+                    },
+                    "streamSettings": {
+                        "network": "tcp",
+                        "security": "reality",
+                        "realitySettings": {
+                            "fingerprint": de_params.get("fp", "firefox"),
+                            "publicKey": de_params.get("pbk", ""),
+                            "serverName": de_params.get("sni", ""),
+                            "shortId": de_params.get("sid", ""),
+                            "spiderX": "/"
+                        },
+                        "tcpSettings": {}
+                    }
+                },
+                {
+                    "tag": "🇷🇺 Россия",
+                    "protocol": "vless",
+                    "settings": {
+                        "vnext": [{
+                            "address": ru_host,
+                            "port": ru_port,
+                            "users": [{
+                                "id": ru_uuid,
+                                "encryption": "none",
+                                "flow": "xtls-rprx-vision"
+                            }]
+                        }]
+                    },
+                    "streamSettings": {
+                        "network": "tcp",
+                        "security": "reality",
+                        "realitySettings": {
+                            "fingerprint": ru_params.get("fp", "firefox"),
+                            "publicKey": ru_params.get("pbk", ""),
+                            "serverName": ru_params.get("sni", ""),
+                            "shortId": ru_params.get("sid", ""),
+                            "spiderX": "/"
+                        },
+                        "tcpSettings": {}
+                    }
+                },
+                {
+                    "tag": "direct",
+                    "protocol": "freedom",
+                    "settings": {"domainStrategy": "UseIP"}
+                },
+                {
+                    "tag": "block",
+                    "protocol": "blackhole"
+                }
+            ],
+            "routing": {
+                "domainStrategy": "IPIfNonMatch",
+                "rules": [
+                    {
+                        "domain": ["geosite:category-ru"],
+                        "outboundTag": "direct"
+                    },
+                    {
+                        "ip": ["geoip:ru", "geoip:private"],
+                        "outboundTag": "direct"
+                    }
+                ]
+            }
+        }
+
+        return json.dumps(config, ensure_ascii=False).encode("utf-8")
 
     def _write_sub_file(self, sub_id: str, content: bytes) -> None:
         """
