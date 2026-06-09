@@ -332,6 +332,14 @@ class PanelClient:
                 "domainStrategy": "IPIfNonMatch",
                 "rules": [
                     {
+                        "domain": ["tiktok.com"],
+                        "outboundTag": "🇩🇪 Германия"
+                    },
+                    {
+                        "domain": ["geosite:category-ads-all"],
+                        "outboundTag": "block"
+                    },
+                    {
                         "domain": ["geosite:category-ru"],
                         "outboundTag": "direct"
                     },
