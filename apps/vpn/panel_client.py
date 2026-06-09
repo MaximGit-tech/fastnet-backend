@@ -272,7 +272,7 @@ class PanelClient:
                 "inbounds": [
                     {
                         "listen": "127.0.0.1",
-                        "port": 1080,
+                        "port": 10808,
                         "protocol": "socks",
                         "settings": {"auth": "noauth", "udp": True},
                         "sniffing": {
