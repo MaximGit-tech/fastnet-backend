@@ -332,7 +332,11 @@ class PanelClient:
                 "domainStrategy": "IPIfNonMatch",
                 "rules": [
                     {
-                        "domain": ["tiktok.com"],
+                        "domain": [
+                            "geosite:tiktok",
+                            "keyword:tiktok",
+                            "keyword:byteoversea"
+                        ],
                         "outboundTag": "🇩🇪 Германия"
                     },
                     {
