@@ -36,6 +36,10 @@ class PanelClient:
     """
     Клиент для работы с 3x-ui API и генерации подписок.
     Основной метод: create_subscription()
+
+    ВАЖНО: DE сервер переведён на транспорт gRPC (вместо TCP+Vision).
+    Поле "flow" для клиентов в 3x-ui должно быть пустым, потому что
+    xtls-rprx-vision работает только с network=tcp и несовместим с gRPC.
     """
 
     # ── 3x-ui API ─────────────────────────────────────────────────
@@ -78,7 +82,7 @@ class PanelClient:
                     \"expiryTime\": 1234567890000,
                     \"subId\": \"abc123\",
                     \"enable\": true,
-                    \"flow\": \"xtls-rprx-vision\",
+                    \"flow\": \"\",              ← пусто, т.к. транспорт gRPC
                     \"limitIp\": 3,
                     \"totalGB\": 0
                 }]}"
@@ -94,7 +98,7 @@ class PanelClient:
             "expiryTime": exp_ms,
             "subId":      sub_id,
             "enable":     True,
-            "flow":       "xtls-rprx-vision",
+            "flow":       "",  # gRPC не использует xtls-rprx-vision
             "limitIp":    2,
             "totalGB":    0,
         }
@@ -143,7 +147,7 @@ class PanelClient:
                     "email":      email,
                     "expiryTime": exp_ms,
                     "enable":     True,
-                    "flow":       "xtls-rprx-vision",
+                    "flow":       "",  # gRPC не использует xtls-rprx-vision
                     "limitIp":    2,
                     "totalGB":    0,
                 }]})
@@ -184,31 +188,39 @@ class PanelClient:
         Структура:
             vless://{uuid}@{ip}:{port}?{params}#{name}
 
-        Параметры Reality:
-            type=tcp              транспорт
-            security=reality      тип шифрования
-            pbk=                  публичный ключ сервера (из 3x-ui → stream_settings)
-            fp=firefox          fingerprint браузера
-            sni=yahoo.com         маскировочный домен
-            sid=                  short ID (из 3x-ui → stream_settings)
-            spx=%2F               spider path
-            flow=xtls-rprx-vision режим XTLS
+        Параметры gRPC + Reality:
+            type=grpc              транспорт (gRPC поверх HTTP/2)
+            serviceName=grpc        имя gRPC-сервиса (совпадает с панелью)
+            mode=multi              multi-mode для лучшей производительности
+            security=reality        тип шифрования
+            pbk=                    публичный ключ сервера (из 3x-ui → stream_settings)
+            fp=firefox               fingerprint браузера
+            sni=yahoo.com            маскировочный домен
+            sid=                     short ID (из 3x-ui → stream_settings)
+            spx=%2F                  spider path
+
+        ВАЖНО: flow=xtls-rprx-vision НЕ используется с gRPC —
+        vision-flow совместим только с network=tcp.
         """
         params = (
-            f"type=tcp"
+            f"type=grpc"
+            f"&serviceName=grpc"
+            f"&mode=multi"
             f"&security=reality"
             f"&pbk={DE_PUBLIC_KEY}"
             f"&fp=firefox"
             f"&sni={DE_SNI}"
             f"&sid={DE_SHORT_ID}"
             f"&spx=%2F"
-            f"&flow=xtls-rprx-vision"
         )
         return f"vless://{client_uuid}@{DE_IP}:{DE_PORT}?{params}#🇩🇪 Германия"
 
     def _build_ru_key(self) -> str:
         """
         Формирует VLESS ключ для RU сервера.
+
+        RU сервер остаётся на транспорте TCP + Vision (без изменений) —
+        это отдельный сервер, не затронутый переходом DE на gRPC.
 
         UUID фиксированный для всех пользователей — это нормально,
         потому что разграничение происходит на уровне файла подписки.
@@ -273,13 +285,13 @@ class PanelClient:
                             "port": de_port,
                             "users": [{
                                 "id": de_uuid,
-                                "encryption": "none",
-                                "flow": "xtls-rprx-vision"
+                                "encryption": "none"
+                                # flow не указываем — gRPC несовместим с vision
                             }]
                         }]
                     },
                     "streamSettings": {
-                        "network": "tcp",
+                        "network": "grpc",
                         "security": "reality",
                         "realitySettings": {
                             "fingerprint": de_params.get("fp", "firefox"),
@@ -288,7 +300,10 @@ class PanelClient:
                             "shortId": de_params.get("sid", ""),
                             "spiderX": "/"
                         },
-                        "tcpSettings": {}
+                        "grpcSettings": {
+                            "serviceName": de_params.get("serviceName", "grpc"),
+                            "multiMode": True
+                        }
                     }
                 },
                 {
