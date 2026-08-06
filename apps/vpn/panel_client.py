@@ -33,15 +33,7 @@ SUB_DIR       = os.getenv("SUB_DIR", "/var/www/sub")
 SUB_BASE_URL  = os.getenv("SUB_BASE_URL")
 
 class PanelClient:
-    """
-    Клиент для работы с 3x-ui API и генерации подписок.
-    Основной метод: create_subscription()
-    """
-
-    # ── 3x-ui API ─────────────────────────────────────────────────
-
     def _get_session(self) -> requests.Session:
-        """Авторизуется в панели и возвращает сессию с куками."""
         session = requests.Session()
         session.verify = False
         resp = session.post(
@@ -55,35 +47,6 @@ class PanelClient:
         return session
 
     def create_panel_client(self, email: str, days: int) -> dict:
-        """
-        Создаёт клиента в 3x-ui inbound.
-
-        Параметры:
-            email: уникальный идентификатор, например "u123456789_42"
-            days:  срок действия в днях
-
-        Возвращает:
-            {
-                "uuid":   "UUID клиента — используется в DE ключе",
-                "sub_id": "SubID — используется как имя файла подписки"
-            }
-
-        Запрос к 3x-ui API:
-            POST /panel/inbound/addClient
-            Body: {
-                "id": 1,                        ← PANEL_INBOUND_ID
-                "settings": "{\"clients\":[{    ← JSON-строка (не объект!)
-                    \"id\": \"UUID\",
-                    \"email\": \"u123_1\",
-                    \"expiryTime\": 1234567890000,
-                    \"subId\": \"abc123\",
-                    \"enable\": true,
-                    \"flow\": \"xtls-rprx-vision\",
-                    \"limitIp\": 3,
-                    \"totalGB\": 0
-                }]}"
-            }
-        """
         client_uuid = str(uuid.uuid4())
         sub_id = uuid.uuid4().hex[:16]
         exp_ms = (int(time.time()) + days * 86400) * 1000
@@ -115,10 +78,6 @@ class PanelClient:
         return {"uuid": client_uuid, "sub_id": sub_id}
 
     def delete_panel_client(self, client_uuid: str) -> bool:
-        """
-        Удаляет клиента из inbound.
-        URL: POST /panel/inbound/{inbound_id}/delClient/{uuid}
-        """
         session = self._get_session()
         resp = session.post(
             f"{PANEL_URL}{PANEL_PATH}panel/api/inbounds/{INBOUND_ID}/delClient/{client_uuid}",
@@ -128,10 +87,6 @@ class PanelClient:
 
     def update_panel_client(self, email: str,
                              client_uuid: str, days: int) -> bool:
-        """
-        Продлевает срок действия клиента в 3x-ui.
-        URL: POST /panel/inbound/updateClient/{uuid}
-        """
         exp_ms  = (int(time.time()) + days * 86400) * 1000
         session = self._get_session()
         resp = session.post(
@@ -153,11 +108,6 @@ class PanelClient:
         return resp.json().get("success", False)
 
     def get_client_traffic(self, email: str) -> dict:
-        """
-        Статистика трафика клиента по email.
-        URL: GET /panel/inbound/getClientTraffics/{email}
-        Возвращает: {"up_gb": 0.5, "down_gb": 2.3, "total_gb": 2.8}
-        """
         session = self._get_session()
         resp = session.get(
             f"{PANEL_URL}{PANEL_PATH}panel/api/inbounds/getClientTraffics/{email}",
@@ -175,25 +125,7 @@ class PanelClient:
             }
         return {"up_gb": 0, "down_gb": 0, "total_gb": 0}
 
-    # ── Генерация VLESS ключей ─────────────────────────────────────
-
     def _build_de_key(self, client_uuid: str) -> str:
-        """
-        Формирует VLESS ключ для DE сервера.
-
-        Структура:
-            vless://{uuid}@{ip}:{port}?{params}#{name}
-
-        Параметры Reality:
-            type=tcp              транспорт
-            security=reality      тип шифрования
-            pbk=                  публичный ключ сервера (из 3x-ui → stream_settings)
-            fp=chrome             fingerprint браузера
-            sni=yahoo.com         маскировочный домен
-            sid=                  short ID (из 3x-ui → stream_settings)
-            spx=%2F               spider path
-            flow=xtls-rprx-vision режим XTLS
-        """
         params = (
             f"type=tcp"
             f"&security=reality"
@@ -207,14 +139,6 @@ class PanelClient:
         return f"vless://{client_uuid}@{DE_IP}:{DE_PORT}?{params}#🇩🇪 Германия"
 
     def _build_ru_key(self) -> str:
-        """
-        Формирует VLESS ключ для RU сервера.
-
-        UUID фиксированный для всех пользователей — это нормально,
-        потому что разграничение происходит на уровне файла подписки.
-        Каждый пользователь имеет свой уникальный файл /var/www/sub/{sub_id}.
-        Если sub_id не известен злоумышленнику — он не получит ключ.
-        """
         params = (
             f"type=tcp"
             f"&security=reality"
@@ -228,26 +152,12 @@ class PanelClient:
         return f"vless://{RU_UUID}@{RU_IP}:{RU_PORT}?{params}#🇷🇺 Россия"
 
     def _build_subscription_content(self, client_uuid: str) -> bytes:
-        """
-        Формирует содержимое файла подписки.
-
-        Формат который понимают happ и v2rayTun:
-            base64(ключ1\nключ2\n...)
-
-        Приложение декодирует base64 и парсит каждую строку как отдельный ключ.
-        Каждый ключ отображается как отдельный профиль в списке серверов.
-        """
         de_key  = self._build_de_key(client_uuid)
         ru_key  = self._build_ru_key()
         content = f"# profile-title: Fast Net ⚡\n{de_key}\n{ru_key}\n"
         return base64.b64encode(content.encode("utf-8"))
 
     def _write_sub_file(self, sub_id: str, content: bytes) -> None:
-        """
-        Записывает файл подписки на DE сервер через SFTP.
-        Файл: /var/www/sub/{sub_id}
-        URL:  https://vpn.test-vpn-spl00.ru:8096/sub/{sub_id}
-        """
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(
@@ -263,7 +173,6 @@ class PanelClient:
         ssh.close()
 
     def _delete_sub_file(self, sub_id: str) -> None:
-        """Удаляет файл подписки с DE сервера."""
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(
@@ -285,28 +194,6 @@ class PanelClient:
     def create_subscription(self, user_id: int,
                              subscription_id: int,
                              days: int) -> dict:
-        """
-        Создаёт полноценную подписку с ключами DE + RU.
-
-        Шаги:
-            1. Создаёт клиента в 3x-ui → получает UUID и sub_id
-            2. Формирует VLESS ключи для DE и RU
-            3. Кодирует в base64
-            4. Записывает файл на DE сервер через SSH
-            5. Возвращает данные для сохранения в БД
-
-        Параметры:
-            telegram_id:     Telegram ID пользователя
-            subscription_id: ID записи в таблице subscriptions
-            days:            срок действия в днях
-
-        Возвращает:
-            {
-                "panel_uuid": "нужен для удаления клиента из 3x-ui",
-                "sub_id":     "имя файла подписки",
-                "sub_link":   "https://vpn.../sub/abc123"
-            }
-        """
         email  = f"u{user_id}_{subscription_id}"
         client = self.create_panel_client(email, days)
 
@@ -320,11 +207,6 @@ class PanelClient:
         }
 
     def delete_subscription(self, panel_uuid: str, sub_id: str) -> None:
-        """
-        Удаляет подписку полностью:
-            1. Удаляет клиента из 3x-ui (ключ перестаёт работать немедленно)
-            2. Удаляет файл подписки (ссылка перестаёт работать)
-        """
         self.delete_panel_client(panel_uuid)
         self._delete_sub_file(sub_id)
 
@@ -333,13 +215,7 @@ class PanelClient:
                             panel_uuid: str,
                             sub_id: str,
                             days: int) -> dict:
-        """
-        Продлевает подписку:
-            1. Обновляет expiryTime в 3x-ui
-            2. Файл подписки не меняется — ссылка остаётся прежней
 
-        Возвращает: {"sub_link": "..."}
-        """
         email = f"u{telegram_id}_{subscription_id}"
         self.update_panel_client(email, panel_uuid, days)
         return {"sub_link": f"{SUB_BASE_URL}/{sub_id}"}

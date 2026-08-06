@@ -19,9 +19,6 @@ RU_SERVER_IP = os.getenv("RU_SERVER_IP")
 
 
 class ServerStatsView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/servers/stats/
-    """
     def get(self, request):
         import paramiko
 
@@ -85,9 +82,6 @@ class ServerStatsView(AdminAuthMixin, CsrfExemptAPIView):
 
 
 class ServerPingView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/servers/{server}/ping/
-    """
     def get(self, request, server):
         hosts = {"de": DE_SSH_HOST, "ru": RU_SERVER_IP}
         if server not in hosts:
@@ -113,10 +107,6 @@ class ServerPingView(AdminAuthMixin, CsrfExemptAPIView):
 
 
 class UserStatsView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/users/stats/
-    Общая статистика по пользователям.
-    """
     def get(self, request):
         now   = timezone.now()
         today = now.date()
@@ -158,10 +148,6 @@ class UserStatsView(AdminAuthMixin, CsrfExemptAPIView):
 
 
 class UserListView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/users/?status=active&search=email&page=1&limit=20
-    Список пользователей с фильтрацией и поиском.
-    """
     def get(self, request):
         status  = request.query_params.get("status")
         search  = request.query_params.get("search", "").strip()
@@ -215,11 +201,6 @@ class UserListView(AdminAuthMixin, CsrfExemptAPIView):
 
 
 class UserDetailView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET  /api/v1/admin/users/{user_id}/
-    POST /api/v1/admin/users/{user_id}/  — действия: ban/unban
-    Детальная информация о пользователе: ключи, платежи, трафик.
-    """
     def get(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -280,10 +261,6 @@ class UserDetailView(AdminAuthMixin, CsrfExemptAPIView):
         })
 
     def post(self, request, user_id):
-        """
-        Действия над пользователем.
-        Body: { "action": "ban" | "unban" }
-        """
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
@@ -303,9 +280,6 @@ class UserDetailView(AdminAuthMixin, CsrfExemptAPIView):
 
 
 class SubscriptionListView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/subscriptions/?status=active&plan=trial&page=1&limit=20
-    """
     def get(self, request):
         status  = request.query_params.get("status")
         plan    = request.query_params.get("plan")
@@ -342,10 +316,6 @@ class SubscriptionListView(AdminAuthMixin, CsrfExemptAPIView):
 
 
 class PaymentStatsView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/payments/stats/?from=2026-01-01&to=2026-05-30
-    Статистика по доходам за произвольный период и за всё время.
-    """
     def get(self, request):
         date_from = request.query_params.get("from")
         date_to   = request.query_params.get("to")
@@ -423,10 +393,6 @@ class PaymentStatsView(AdminAuthMixin, CsrfExemptAPIView):
 
 
 class PaymentListView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/payments/?status=paid&page=1&limit=20
-    Список всех платежей.
-    """
     def get(self, request):
         status = request.query_params.get("status")
         page   = int(request.query_params.get("page", 1))
@@ -460,10 +426,6 @@ class PaymentListView(AdminAuthMixin, CsrfExemptAPIView):
 
 
 class TrafficStatsView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/traffic/
-    Трафик по всем активным подпискам + топ-5 по потреблению.
-    """
     def get(self, request):
         active_subs  = Subscription.objects.filter(status="active").select_related("user", "plan")
         traffic_list = []
@@ -504,10 +466,6 @@ class TrafficStatsView(AdminAuthMixin, CsrfExemptAPIView):
     
 
 class AdminLoginView(CsrfExemptAPIView):
-    """
-    POST /api/v1/admin/auth/login/
-    Body: { "email": "...", "password": "..." }
-    """
     def post(self, request):
         email    = request.data.get("email", "").strip().lower()
         password = request.data.get("password", "")
@@ -537,10 +495,6 @@ class AdminLoginView(CsrfExemptAPIView):
 
 
 class AdminRefreshView(CsrfExemptAPIView):
-    """
-    POST /api/v1/admin/auth/refresh/
-    Body: { "refresh": "..." }
-    """
     def post(self, request):
         from rest_framework_simplejwt.tokens import RefreshToken as RT
         token_str = request.data.get("refresh", "")
@@ -554,10 +508,6 @@ class AdminRefreshView(CsrfExemptAPIView):
 
 
 class AdminMeView(AdminAuthMixin, CsrfExemptAPIView):
-    """
-    GET /api/v1/admin/auth/me/
-    Информация о текущем администраторе.
-    """
     def get(self, request):
         try:
             admin = Admin.objects.get(id=request.admin_id)

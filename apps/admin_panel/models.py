@@ -1,5 +1,4 @@
 from django.db import models
-import secrets
 
 class Admin(models.Model):
     email      = models.EmailField(unique=True)

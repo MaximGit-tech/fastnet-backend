@@ -18,9 +18,6 @@ def generate_code() -> str:
 
 
 class RegisterView(CsrfExemptAPIView):
-    """
-    POST /api/v1/users/register/
-    """
     def post(self, request):
         email     = request.data.get("email", "").lower().strip()
         ref_token = request.data.get("ref_token", "").strip()
@@ -72,9 +69,6 @@ class RegisterView(CsrfExemptAPIView):
 
 
 class VerifyEmailView(CsrfExemptAPIView):
-    """
-    POST /api/v1/users/verify-email/
-    """
     def post(self, request):
         user_id     = request.data.get("user_id")
         code        = request.data.get("code", "").strip()
@@ -139,9 +133,6 @@ class VerifyEmailView(CsrfExemptAPIView):
 
 
 class ResendCodeView(CsrfExemptAPIView):
-    """
-    POST /api/v1/users/resend-code/
-    """
     def post(self, request):
         user_id = request.data.get("user_id")
 
@@ -181,9 +172,6 @@ class ResendCodeView(CsrfExemptAPIView):
 
 
 class GetUserView(CsrfExemptAPIView):
-    """
-    GET /api/v1/users/me/
-    """
     def get(self, request):
         user, err = get_user_from_request(request)
         if err:
@@ -201,9 +189,6 @@ class GetUserView(CsrfExemptAPIView):
 
 
 class GetRefLinksView(CsrfExemptAPIView):
-    """
-    GET /api/v1/users/ref-links/
-    """
     def get(self, request):
         user, err = get_user_from_request(request)
         if err:
@@ -228,9 +213,6 @@ class GetRefLinksView(CsrfExemptAPIView):
 
 
 class WebLoginView(CsrfExemptAPIView):
-    """
-    POST /api/v1/users/web/login/
-    """
     def post(self, request):
         email     = request.data.get("email", "").lower().strip()
         ref_token = request.data.get("ref", "").strip()
@@ -277,9 +259,6 @@ class WebLoginView(CsrfExemptAPIView):
 
 
 class WebVerifyView(CsrfExemptAPIView):
-    """
-    POST /api/v1/users/web/verify/
-    """
     def post(self, request):
         from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -336,9 +315,6 @@ class WebVerifyView(CsrfExemptAPIView):
 
 
 class WebRefreshView(CsrfExemptAPIView):
-    """
-    POST /api/v1/users/web/refresh/
-    """
     def post(self, request):
         from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
@@ -355,9 +331,6 @@ class WebRefreshView(CsrfExemptAPIView):
     
 
 class GetReferrerInfoView(CsrfExemptAPIView):
-    """
-    GET /api/v1/users/referrer-info/?ref_token=<token>
-    """
     def get(self, request):
         ref_token = request.query_params.get("ref_token", "").strip()
         if not ref_token:

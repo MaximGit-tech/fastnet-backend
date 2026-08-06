@@ -5,9 +5,6 @@ from django.utils import timezone
 
 
 class UserSubscriptionListView(CsrfExemptAPIView):
-    """
-    GET /api/v1/subscriptions/
-    """
     def get(self, request):
         from apps.utils.authentication import get_user_from_request
 
@@ -36,7 +33,6 @@ class UserSubscriptionListView(CsrfExemptAPIView):
 
 
 class GetPlans(CsrfExemptAPIView):
-    """GET /api/v1/subscriptions/plans/"""
     def get(self, request):
         plans = Plan.objects.filter(is_active=True, price_rub__gt=0).order_by('price_rub')
 
@@ -49,9 +45,6 @@ class GetPlans(CsrfExemptAPIView):
     
 
 class RenewSubscriptionView(CsrfExemptAPIView):
-    """
-    POST /api/v1/subscriptions/{subscription_id}/renew/
-    """
     def post(self, request, subscription_id):
         from apps.vpn.panel_client import panel
         from apps.utils.authentication import get_user_from_request
@@ -98,9 +91,6 @@ class RenewSubscriptionView(CsrfExemptAPIView):
 
 
 class RegenerateSubIdView(CsrfExemptAPIView):
-    """
-    POST /api/v1/subscriptions/{subscription_id}/regenerate/
-    """
     def post(self, request, subscription_id):
         from apps.vpn.panel_client import panel
         from apps.utils.authentication import get_user_from_request

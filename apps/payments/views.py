@@ -20,9 +20,6 @@ YOOKASSA_RETURN_URL_WEB = os.getenv("YOOKASSA_RETURN_URL_WEB", "https://fast-net
 
 
 class YookassaPaymentCreateView(CsrfExemptAPIView):
-    """
-    POST /api/v1/payment/yookassa/create/
-    """
     def post(self, request):
         from apps.utils.authentication import get_user_from_request
 
@@ -88,9 +85,6 @@ class YookassaPaymentCreateView(CsrfExemptAPIView):
 
 
 class YookassaWebhookView(CsrfExemptAPIView):
-    """
-    POST /api/v1/payment/yookassa/webhook/
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):

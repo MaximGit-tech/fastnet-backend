@@ -6,10 +6,6 @@ BOT_WEBHOOK_URL = os.getenv('BOT_WEBHOOK_URL')
 BOT_SECRET      = os.getenv("BOT_SECRET")
 
 def notify_bot(user, event: str, data: dict):
-    """
-    Отправляет событие боту - бот шлёт сообщение пользователю, если через сайт, то ничего не делаем
-    """
-
     if not user.telegram_id:
         return
 
