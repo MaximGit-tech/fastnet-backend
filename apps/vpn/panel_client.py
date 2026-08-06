@@ -4,7 +4,6 @@ import time
 import json
 import requests
 import paramiko
-import base64
 
 PANEL_URL     = os.getenv("PANEL_URL")
 PANEL_PATH    = os.getenv("PANEL_PATH", "/")
@@ -57,7 +56,7 @@ class PanelClient:
             "expiryTime": exp_ms,
             "subId":      sub_id,
             "enable":     True,
-            "flow":       "xtls-rprx-vision",
+            "flow":       "",
             "limitIp":    2,
             "totalGB":    0,
         }
@@ -98,7 +97,7 @@ class PanelClient:
                     "email":      email,
                     "expiryTime": exp_ms,
                     "enable":     True,
-                    "flow":       "xtls-rprx-vision",
+                    "flow":       "",
                     "limitIp":    2,
                     "totalGB":    0,
                 }]})
@@ -127,14 +126,15 @@ class PanelClient:
 
     def _build_de_key(self, client_uuid: str) -> str:
         params = (
-            f"type=tcp"
+            f"type=grpc"
+            f"&serviceName=grpc"
+            f"&mode=multi"
             f"&security=reality"
             f"&pbk={DE_PUBLIC_KEY}"
-            f"&fp=chrome"
+            f"&fp=firefox"
             f"&sni={DE_SNI}"
             f"&sid={DE_SHORT_ID}"
             f"&spx=%2F"
-            f"&flow=xtls-rprx-vision"
         )
         return f"vless://{client_uuid}@{DE_IP}:{DE_PORT}?{params}#🇩🇪 Германия"
 
@@ -143,7 +143,7 @@ class PanelClient:
             f"type=tcp"
             f"&security=reality"
             f"&pbk={RU_PUBLIC_KEY}"
-            f"&fp=chrome"
+            f"&fp=firefox"
             f"&sni={RU_SNI}"
             f"&sid={RU_SHORT_ID}"
             f"&spx=%2F"
@@ -152,10 +152,136 @@ class PanelClient:
         return f"vless://{RU_UUID}@{RU_IP}:{RU_PORT}?{params}#🇷🇺 Россия"
 
     def _build_subscription_content(self, client_uuid: str) -> bytes:
-        de_key  = self._build_de_key(client_uuid)
-        ru_key  = self._build_ru_key()
-        content = f"# profile-title: Fast Net ⚡\n{de_key}\n{ru_key}\n"
-        return base64.b64encode(content.encode("utf-8"))
+        import json
+        import urllib.parse
+
+        de_key = self._build_de_key(client_uuid)
+        ru_key = self._build_ru_key()
+
+        def parse_vless(key):
+            url = key.split("vless://")[1]
+            uuid, rest = url.split("@")
+            host_port, params_fragment = rest.split("?", 1)
+            params_str = params_fragment.split("#")[0]
+            params = dict(urllib.parse.parse_qsl(params_str))
+            host, port = host_port.rsplit(":", 1)
+            return uuid, host, int(port), params
+
+        de_uuid, de_host, de_port, de_params = parse_vless(de_key)
+        ru_uuid, ru_host, ru_port, ru_params = parse_vless(ru_key)
+
+        config = {
+            "log": {"loglevel": "warning"},
+            "remarks": "Fast Net ⚡",
+            "inbounds": [
+                {
+                    "listen": "127.0.0.1",
+                    "port": 10808,
+                    "protocol": "socks",
+                    "settings": {"auth": "noauth", "udp": True},
+                    "sniffing": {
+                        "enabled": True,
+                        "destOverride": ["http", "tls", "quic"],
+                        "routeOnly": True
+                    },
+                    "tag": "socks"
+                }
+            ],
+            "outbounds": [
+                {
+                    "tag": "🇩🇪 Германия",
+                    "protocol": "vless",
+                    "settings": {
+                        "vnext": [{
+                            "address": de_host,
+                            "port": de_port,
+                            "users": [{
+                                "id": de_uuid,
+                                "encryption": "none"
+                            }]
+                        }]
+                    },
+                    "streamSettings": {
+                        "network": "grpc",
+                        "security": "reality",
+                        "realitySettings": {
+                            "fingerprint": de_params.get("fp", "firefox"),
+                            "publicKey": de_params.get("pbk", ""),
+                            "serverName": de_params.get("sni", ""),
+                            "shortId": de_params.get("sid", ""),
+                            "spiderX": "/"
+                        },
+                        "grpcSettings": {
+                            "serviceName": de_params.get("serviceName", "grpc"),
+                            "multiMode": True
+                        }
+                    }
+                },
+                {
+                    "tag": "🇷🇺 Россия",
+                    "protocol": "vless",
+                    "settings": {
+                        "vnext": [{
+                            "address": ru_host,
+                            "port": ru_port,
+                            "users": [{
+                                "id": ru_uuid,
+                                "encryption": "none",
+                                "flow": "xtls-rprx-vision"
+                            }]
+                        }]
+                    },
+                    "streamSettings": {
+                        "network": "tcp",
+                        "security": "reality",
+                        "realitySettings": {
+                            "fingerprint": ru_params.get("fp", "firefox"),
+                            "publicKey": ru_params.get("pbk", ""),
+                            "serverName": ru_params.get("sni", ""),
+                            "shortId": ru_params.get("sid", ""),
+                            "spiderX": "/"
+                        },
+                        "tcpSettings": {}
+                    }
+                },
+                {
+                    "tag": "direct",
+                    "protocol": "freedom",
+                    "settings": {"domainStrategy": "UseIP"}
+                },
+                {
+                    "tag": "block",
+                    "protocol": "blackhole"
+                }
+            ],
+            "routing": {
+                "domainStrategy": "IPIfNonMatch",
+                "rules": [
+                    {
+                        "domain": [
+                            "geosite:tiktok",
+                            "keyword:tiktok",
+                            "keyword:byteoversea"
+                        ],
+                        "outboundTag": "🇩🇪 Германия"
+                    },
+                    {
+                        "domain": ["geosite:category-ads-all"],
+                        "outboundTag": "block"
+                    },
+                    {
+                        "domain": ["geosite:category-ru"],
+                        "outboundTag": "direct"
+                    },
+                    {
+                        "ip": ["geoip:ru", "geoip:private"],
+                        "outboundTag": "direct"
+                    }
+                ]
+            }
+        }
+
+        return json.dumps(config, ensure_ascii=False).encode("utf-8")
 
     def _write_sub_file(self, sub_id: str, content: bytes) -> None:
         ssh = paramiko.SSHClient()
